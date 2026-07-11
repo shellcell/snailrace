@@ -1,0 +1,33 @@
+package runner
+
+import (
+	"context"
+	"testing"
+	"time"
+)
+
+func TestFixedDurationTUIStopsProcessGroup(t *testing.T) {
+	duration := 50 * time.Millisecond
+	run, err := runTUIOnce(
+		context.Background(),
+		Spec{Name: "sleep", Shell: "sleep 5"},
+		5*time.Millisecond,
+		Options{TUI: true, Duration: duration},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.StopReason != "duration" {
+		t.Fatalf("stop reason = %q, want duration", run.StopReason)
+	}
+	if run.WallSeconds < duration.Seconds() || run.WallSeconds > 0.2 {
+		t.Fatalf("wall time = %.3fs, want approximately %.3fs", run.WallSeconds, duration.Seconds())
+	}
+}
+
+func TestTerminalSizeOverridesDimensions(t *testing.T) {
+	width, height := ResolveTerminalSize(132, 43)
+	if width != 132 || height != 43 {
+		t.Fatalf("terminal size = %dx%d, want 132x43", width, height)
+	}
+}

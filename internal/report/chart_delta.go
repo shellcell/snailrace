@@ -1,0 +1,141 @@
+package report
+
+import (
+	"fmt"
+	"html"
+	"math"
+	"strings"
+
+	"perftool/internal/model"
+)
+
+type forestRow struct {
+	label            string
+	point, low, high float64
+	status, class    string
+	identity         string
+	baseline         bool
+}
+
+func deltaForestChart(report model.Report, group chartGroup) svgChart {
+	baselinePosition := baselineIndex(report)
+	baseline := report.Benchmarks[baselinePosition]
+	rows := make([]forestRow, 0)
+	maximum := 0.0
+	for _, metric := range group.metrics {
+		row := metricRows[metric.row]
+		if !available(row, report.Host.OS) {
+			rows = append(rows, forestRow{
+				label: metric.name, status: "N/A on " + report.Host.OS,
+				class: "neutral", identity: toolColor(report, baselinePosition),
+				baseline: true,
+			})
+			continue
+		}
+		baseMean := metric.stats(baseline).Mean
+		rows = append(rows, forestRow{
+			label:  metric.name + " · " + reportToolLabel(report, baselinePosition),
+			status: metric.format(baseMean) + " · baseline",
+			class:  "neutral", identity: toolColor(report, baselinePosition),
+			baseline: true,
+		})
+		if baseMean == 0 {
+			for index, candidate := range report.Benchmarks {
+				if index == baselinePosition {
+					continue
+				}
+				value := metric.stats(candidate).Mean
+				rows = append(rows, forestRow{
+					label:  metric.name + " · " + candidate.Tool.Name,
+					status: metric.format(value) + " · Δ n/a (baseline 0)",
+					class:  "neutral", identity: toolColor(report, index),
+					baseline: true,
+				})
+			}
+			continue
+		}
+		for index, candidate := range report.Benchmarks {
+			if index == baselinePosition {
+				continue
+			}
+			delta := compareMetric(
+				baseline, candidate, row, report.Config.IntervalMS/1000,
+			)
+			low := delta.difference.CI95Low / baseMean * 100
+			high := delta.difference.CI95High / baseMean * 100
+			maximum = math.Max(maximum, math.Max(math.Abs(low), math.Abs(high)))
+			maximum = math.Max(maximum, math.Abs(delta.percent))
+			rows = append(rows, forestRow{
+				label: metric.name + " · " + candidate.Tool.Name,
+				point: delta.percent, low: low, high: high,
+				status: delta.status, class: delta.class,
+				identity: toolColor(report, index),
+			})
+		}
+	}
+	if len(rows) == 0 {
+		return svgChart{}
+	}
+	maximum = niceDeltaScale(maximum)
+	return renderForest(group.name, baseline.Tool.Name, rows, maximum)
+}
+
+func renderForest(
+	title, baseline string,
+	rows []forestRow,
+	maximum float64,
+) svgChart {
+	const left, plotWidth, rowHeight = 225, 330, 30
+	center := float64(left) + plotWidth/2
+	height := 76 + len(rows)*rowHeight
+	position := func(value float64) float64 {
+		value = math.Max(-maximum, math.Min(maximum, value))
+		return center + value/maximum*(plotWidth/2)
+	}
+	var body strings.Builder
+	body.WriteString(svgChartStyle)
+	fmt.Fprintf(
+		&body,
+		`<rect width="100%%" height="100%%" rx="8" fill="#3b4252"/>`+
+			`<text x="16" y="24" class="title">Δ FROM BASELINE · %s</text>`+
+			`<text x="16" y="43" class="subtitle">baseline: %s (Δ 0%%) · point = mean · whisker = paired 95%% CI</text>`+
+			`<path d="M %.1f 54 V %d" stroke="#4c566a" stroke-dasharray="3 3"/>`+
+			`<text x="%d" y="62" class="value">-%g%%</text>`+
+			`<text x="%.1f" y="62" text-anchor="middle" class="value">0</text>`+
+			`<text x="%d" y="62" text-anchor="end" class="value">+%g%%</text>`,
+		html.EscapeString(title), html.EscapeString(clip(baseline, 40)),
+		center, height-12, left, maximum,
+		center, left+plotWidth, maximum,
+	)
+	for index, row := range rows {
+		y := 72 + index*rowHeight
+		color := statusColor(row.class)
+		if row.baseline {
+			fmt.Fprintf(
+				&body,
+				`<text x="16" y="%d" class="label" style="fill:%s">%s</text>`+
+					`<path d="M %.1f %d l 6 6 -6 6 -6 -6 z" fill="%s"/>`+
+					`<text x="570" y="%d" fill="%s" font-size="11">%s</text>`,
+				y, row.identity, html.EscapeString(clip(row.label, 31)), position(0), y-10,
+				color, y, color, html.EscapeString(row.status),
+			)
+			continue
+		}
+		fmt.Fprintf(
+			&body,
+			`<text x="16" y="%d" class="label" style="fill:%s">%s</text>`+
+				`<path d="M %.1f %d H %.1f M %.1f %d v 10 M %.1f %d v 10" `+
+				`stroke="%s" stroke-width="2"/>`+
+				`<circle cx="%.1f" cy="%d" r="5" fill="%s"/>`+
+				`<text x="570" y="%d" fill="%s" font-size="11">%s %s</text>`,
+			y, row.identity, html.EscapeString(clip(row.label, 31)), position(row.low), y-4,
+			position(row.high), position(row.low), y-9, position(row.high), y-9,
+			color, position(row.point), y-4, color, y, color,
+			formatSignedPercent(row.point), row.status,
+		)
+	}
+	return svgChart{
+		kind: "baseline", title: title, slug: chartSlug(title),
+		body: body.String(), height: height,
+	}
+}

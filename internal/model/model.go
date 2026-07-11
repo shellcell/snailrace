@@ -1,0 +1,101 @@
+package model
+
+import "time"
+
+type Config struct {
+	Runs              int           `json:"runs"`
+	Warmups           int           `json:"warmups"`
+	Interval          time.Duration `json:"-"`
+	IntervalMS        float64       `json:"sample_interval_ms"`
+	Mode              string        `json:"mode"`
+	DurationSeconds   float64       `json:"duration_seconds,omitempty"`
+	TerminalWidth     uint16        `json:"terminal_width,omitempty"`
+	TerminalHeight    uint16        `json:"terminal_height,omitempty"`
+	TerminalInherited bool          `json:"terminal_inherited,omitempty"`
+	Baseline          int           `json:"baseline"`
+}
+
+type HostInfo struct {
+	OS                string `json:"os"`
+	Architecture      string `json:"architecture"`
+	Kernel            string `json:"kernel"`
+	CPU               string `json:"cpu"`
+	LogicalCPUs       int    `json:"logical_cpus"`
+	MemoryTotalBytes  uint64 `json:"memory_total_bytes"`
+	MemoryBeforeBytes uint64 `json:"memory_available_before_bytes"`
+	MemoryAfterBytes  uint64 `json:"memory_available_after_bytes"`
+	ProcessesBefore   int    `json:"processes_before"`
+	LoadBefore        string `json:"load_average_before"`
+}
+
+type ToolInfo struct {
+	Name               string     `json:"name"`
+	Command            []string   `json:"command"`
+	Executable         string     `json:"executable,omitempty"`
+	SizeBytes          int64      `json:"size_bytes,omitempty"`
+	SHA256             string     `json:"sha256,omitempty"`
+	LinkedSizeBytes    int64      `json:"linked_size_bytes,omitempty"`
+	DiskFootprintBytes int64      `json:"disk_footprint_bytes,omitempty"`
+	LinkedFiles        []DiskFile `json:"linked_files,omitempty"`
+}
+
+type DiskFile struct {
+	Path      string `json:"path"`
+	SizeBytes int64  `json:"size_bytes"`
+}
+
+type Run struct {
+	Index               int     `json:"index"`
+	ExitCode            int     `json:"exit_code"`
+	WallSeconds         float64 `json:"wall_seconds"`
+	CPUUserSeconds      float64 `json:"cpu_user_seconds"`
+	CPUSystemSeconds    float64 `json:"cpu_system_seconds"`
+	AverageCPUPercent   float64 `json:"average_cpu_percent"`
+	PeakResidentBytes   float64 `json:"peak_resident_bytes"`
+	MeanResidentBytes   float64 `json:"mean_resident_bytes"`
+	PeakVirtualBytes    float64 `json:"peak_virtual_bytes"`
+	PeakProcesses       float64 `json:"peak_processes"`
+	PeakThreads         float64 `json:"peak_threads"`
+	PeakFileDescriptors float64 `json:"peak_file_descriptors"`
+	StopReason          string  `json:"stop_reason"`
+}
+
+type Stats struct {
+	N        int     `json:"n"`
+	Min      float64 `json:"min"`
+	Max      float64 `json:"max"`
+	Mean     float64 `json:"mean"`
+	StdDev   float64 `json:"stddev"`
+	Median   float64 `json:"median"`
+	P95      float64 `json:"p95"`
+	CI95Low  float64 `json:"ci95_low"`
+	CI95High float64 `json:"ci95_high"`
+}
+
+type Summary struct {
+	WallSeconds         Stats `json:"wall_seconds"`
+	CPUTotalSeconds     Stats `json:"cpu_total_seconds"`
+	CPUUserSeconds      Stats `json:"cpu_user_seconds"`
+	CPUSystemSeconds    Stats `json:"cpu_system_seconds"`
+	AverageCPUPercent   Stats `json:"average_cpu_percent"`
+	PeakResidentBytes   Stats `json:"peak_resident_bytes"`
+	MeanResidentBytes   Stats `json:"mean_resident_bytes"`
+	PeakVirtualBytes    Stats `json:"peak_virtual_bytes"`
+	PeakProcesses       Stats `json:"peak_processes"`
+	PeakThreads         Stats `json:"peak_threads"`
+	PeakFileDescriptors Stats `json:"peak_file_descriptors"`
+}
+
+type Benchmark struct {
+	Tool    ToolInfo `json:"tool"`
+	Runs    []Run    `json:"runs"`
+	Summary Summary  `json:"summary"`
+}
+
+type Report struct {
+	MeasuredAt time.Time   `json:"measured_at"`
+	Config     Config      `json:"config"`
+	Host       HostInfo    `json:"host"`
+	Benchmarks []Benchmark `json:"benchmarks"`
+	Notes      []string    `json:"notes,omitempty"`
+}

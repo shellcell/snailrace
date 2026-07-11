@@ -1,0 +1,114 @@
+package app
+
+import (
+	"math"
+	"regexp"
+	"strings"
+	"testing"
+	"time"
+
+	"perftool/internal/model"
+	"perftool/internal/runner"
+)
+
+var progressColorSequence = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func TestProgressRaceAdvancesBetterExpectedTool(t *testing.T) {
+	event := runner.ProgressEvent{
+		Completed: 2, Total: 4, Elapsed: time.Second, ETA: time.Second,
+		Estimates: []runner.ProgressEstimate{
+			progressEstimate("better", 1),
+			progressEstimate("worse", 2),
+		},
+	}
+	lines := progressRaceLines(event, 80)
+	if len(lines) != 2 {
+		t.Fatalf("race lines = %d, want 2", len(lines))
+	}
+	for _, line := range lines {
+		if !strings.HasSuffix(progressColorSequence.ReplaceAllString(line, ""), "🐌") {
+			t.Fatalf("track does not end in snail: %q", line)
+		}
+	}
+	if progressTrailLength(lines[0]) <= progressTrailLength(lines[1]) {
+		t.Fatalf("better tool should be farther ahead:\n%s\n%s", lines[0], lines[1])
+	}
+	if !strings.Contains(lines[0], "▁") || !strings.Contains(lines[1], "▅") {
+		t.Fatalf("higher RAM should leave a thicker trail:\n%s\n%s", lines[0], lines[1])
+	}
+	colorPrefix := strings.TrimSuffix(progressToolColor(0, ""), "\x1b[0m")
+	if !strings.Contains(lines[0], colorPrefix+"better") {
+		t.Fatal("tool name does not use its report color")
+	}
+}
+
+func TestProgressTrackUsesThreeQuartersForMeasurements(t *testing.T) {
+	before := progressTrackFraction(4, 10, 0.5)
+	after := progressTrackFraction(5, 10, 0.5)
+	if difference := after - before; math.Abs(difference-0.075) > 1e-9 {
+		t.Fatalf("one of ten measurements advanced %.3f, want 0.075", difference)
+	}
+	if got := progressTrackFraction(10, 10, 1); got != 1 {
+		t.Fatalf("completed winning track = %g, want 1", got)
+	}
+}
+
+func TestProgressTrailProvidesMultipleRAMGradations(t *testing.T) {
+	tools := make([]runner.ProgressEstimate, 0, 6)
+	for _, scale := range []float64{1, 1.25, 1.5, 2, 3, 4} {
+		tools = append(tools, progressEstimate("tool", scale))
+	}
+	unique := make(map[string]bool)
+	for _, trail := range progressTrailCharacters(tools) {
+		unique[trail] = true
+	}
+	if len(unique) < 5 {
+		t.Fatalf("RAM trail gradations = %d, want at least 5", len(unique))
+	}
+}
+
+func TestProgressColorsToolsBeforeCalibration(t *testing.T) {
+	event := runner.ProgressEvent{Estimates: []runner.ProgressEstimate{
+		{ToolName: "first", Total: 10}, {ToolName: "second", Total: 10},
+	}}
+	for index, line := range progressRaceLines(event, 80) {
+		prefix := strings.TrimSuffix(progressToolColor(index, ""), "\x1b[0m")
+		if !strings.Contains(line, prefix+event.Estimates[index].ToolName) ||
+			!strings.Contains(line, prefix+"🐌") {
+			t.Fatalf("uncalibrated tool %d is not consistently colored: %q", index, line)
+		}
+	}
+}
+
+func TestProgressStatusRemainsFirstLineContent(t *testing.T) {
+	status := progressStatus(runner.ProgressEvent{
+		ToolName: "first", Tool: 1, ToolCount: 2,
+		Iteration: 2, Iterations: 3, Completed: 1, Total: 6,
+		ETA: time.Second,
+	})
+	for _, expected := range []string{"[2/6]", "🐌 tool 1/2 first", "run 2/3", "ETA 1s"} {
+		if !strings.Contains(status, expected) {
+			t.Fatalf("status does not contain %q: %q", expected, status)
+		}
+	}
+}
+
+func progressEstimate(name string, scale float64) runner.ProgressEstimate {
+	stats := model.Stats{Mean: scale}
+	return runner.ProgressEstimate{
+		ToolName: name, Completed: 1, Total: 2, HasEstimate: true,
+		DiskFootprintBytes: int64(scale * 100),
+		Estimate: model.Summary{
+			WallSeconds: stats, CPUTotalSeconds: stats,
+			MeanResidentBytes: stats, PeakResidentBytes: stats,
+		},
+	}
+}
+
+func progressTrailLength(line string) int {
+	length := 0
+	for _, glyph := range progressTrailGlyphs {
+		length += strings.Count(line, glyph)
+	}
+	return length
+}
