@@ -65,6 +65,15 @@ func TestUnlimitedTUIDefaultsToSingleRun(t *testing.T) {
 	}
 }
 
+func TestRejectsShowOutputInTUIMode(t *testing.T) {
+	_, err := parseOptions(
+		[]string{"tui", "-show-output", "--", "htop"}, io.Discard,
+	)
+	if err == nil {
+		t.Fatal("show-output has no valid TUI semantics")
+	}
+}
+
 func TestParseExplicitBaseline(t *testing.T) {
 	options, err := parseOptions(
 		[]string{"-baseline", "2", "-c", "one", "-c", "two"},

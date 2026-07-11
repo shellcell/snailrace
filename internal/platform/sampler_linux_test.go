@@ -19,3 +19,9 @@ func TestCountDirectoryDoesNotRequireSortedEntries(t *testing.T) {
 		t.Fatalf("directory count = %d, want 3", got)
 	}
 }
+
+func TestMissingRootIsNotAZeroSample(t *testing.T) {
+	if _, valid := SampleTree(1 << 30); valid {
+		t.Fatal("missing root process should produce an invalid sample")
+	}
+}

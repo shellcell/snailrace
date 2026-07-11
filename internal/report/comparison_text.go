@@ -27,7 +27,7 @@ func writeTextComparison(writer io.Writer, report model.Report) {
 			float64(candidate.Tool.DiskFootprintBytes),
 		)
 		fmt.Fprintf(
-			writer, "Linked footprint\t%s\t%s\t%s\texact metadata\n",
+			writer, "Linked footprint\t%s\t%s\t%s\tstatic discovery\n",
 			formatBytes(float64(baseline.Tool.DiskFootprintBytes)),
 			formatBytes(float64(candidate.Tool.DiskFootprintBytes)), staticDelta,
 		)

@@ -40,3 +40,21 @@ func TestColumnGapsFindsRunsOfAtLeastTwoSpaces(t *testing.T) {
 		}
 	}
 }
+
+func TestSingleObservationReportsUndefinedConfidenceInterval(t *testing.T) {
+	benchmark := benchmarkWithWallTimes("tool", 1)
+	var output bytes.Buffer
+	writeTextBenchmark(&output, "linux", 0, benchmark, false)
+	if !strings.Contains(output.String(), "N/A (n < 2)") {
+		t.Fatal("single observation should report an undefined confidence interval")
+	}
+}
+
+func TestStatisticalDetailWarnsAboutLimitedSampling(t *testing.T) {
+	benchmark := benchmarkWithWallTimes("tool", 1)
+	var output bytes.Buffer
+	writeTextBenchmark(&output, "linux", 0.1, benchmark, false)
+	if !strings.Contains(output.String(), "Sampling quality") {
+		t.Fatal("sampling-limited detail should carry a visible warning")
+	}
+}

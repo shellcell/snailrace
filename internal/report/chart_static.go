@@ -31,7 +31,7 @@ func staticCostChart(
 		&body,
 		`<rect width="100%%" height="100%%" rx="8" fill="#3b4252"/>`+
 			`<text x="16" y="24" class="title">%s</text>`+
-			`<text x="16" y="42" class="subtitle">exact executable + linked-library bytes</text>`,
+			`<text x="16" y="42" class="subtitle">statically discovered executable + linked-library bytes</text>`,
 		html.EscapeString(name),
 	)
 	fmt.Fprintf(

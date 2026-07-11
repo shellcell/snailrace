@@ -40,8 +40,8 @@ func chartGroups(report model.Report) []chartGroup {
 	groups := []chartGroup{
 		{"PERFORMANCE", metrics[0:1]},
 		{"CPU COST", metrics[1:5]},
-		{"MEMORY COST", metrics[5:8]},
-		{"PROCESS STRUCTURE", metrics[8:11]},
+		{"MEMORY COST", metrics[5:9]},
+		{"PROCESS STRUCTURE", metrics[9:12]},
 	}
 	if report.Config.Mode == "tui" && report.Config.DurationSeconds > 0 {
 		groups = groups[1:]
@@ -72,17 +72,20 @@ func chartMetricDefinitions() []chartMetric {
 		{"Peak RSS", formatBytes,
 			func(b model.Benchmark) model.Stats { return b.Summary.PeakResidentBytes },
 			func(r model.Run) float64 { return r.PeakResidentBytes }, 6},
+		{"Waited process max RSS", formatBytes,
+			func(b model.Benchmark) model.Stats { return b.Summary.WaitedMaxRSSBytes },
+			func(r model.Run) float64 { return r.WaitedMaxRSSBytes }, 7},
 		{"Peak virtual memory", formatBytes,
 			func(b model.Benchmark) model.Stats { return b.Summary.PeakVirtualBytes },
-			func(r model.Run) float64 { return r.PeakVirtualBytes }, 7},
+			func(r model.Run) float64 { return r.PeakVirtualBytes }, 8},
 		{"Peak processes", formatCount,
 			func(b model.Benchmark) model.Stats { return b.Summary.PeakProcesses },
-			func(r model.Run) float64 { return r.PeakProcesses }, 8},
+			func(r model.Run) float64 { return r.PeakProcesses }, 9},
 		{"Peak threads", formatCount,
 			func(b model.Benchmark) model.Stats { return b.Summary.PeakThreads },
-			func(r model.Run) float64 { return r.PeakThreads }, 9},
+			func(r model.Run) float64 { return r.PeakThreads }, 10},
 		{"Peak FD references", formatCount,
 			func(b model.Benchmark) model.Stats { return b.Summary.PeakFileDescriptors },
-			func(r model.Run) float64 { return r.PeakFileDescriptors }, 10},
+			func(r model.Run) float64 { return r.PeakFileDescriptors }, 11},
 	}
 }

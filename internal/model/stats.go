@@ -30,6 +30,9 @@ func Summarize(runs []Run) Summary {
 		PeakResidentBytes: stats(values(func(r Run) float64 {
 			return r.PeakResidentBytes
 		})),
+		WaitedMaxRSSBytes: stats(values(func(r Run) float64 {
+			return r.WaitedMaxRSSBytes
+		})),
 		MeanResidentBytes: stats(values(func(r Run) float64 {
 			return r.MeanResidentBytes
 		})),
@@ -40,6 +43,12 @@ func Summarize(runs []Run) Summary {
 		PeakThreads:   stats(values(func(r Run) float64 { return r.PeakThreads })),
 		PeakFileDescriptors: stats(values(func(r Run) float64 {
 			return r.PeakFileDescriptors
+		})),
+		ValidSampleCount: stats(values(func(r Run) float64 {
+			return float64(r.SampleCount)
+		})),
+		SampleCoverageSeconds: stats(values(func(r Run) float64 {
+			return r.SampleCoverageSeconds
 		})),
 	}
 }
@@ -67,6 +76,7 @@ func stats(values []float64) Stats {
 	}
 	standardDeviation := math.Sqrt(variance)
 	margin := 0.0
+	validInterval := len(sorted) > 1
 	if len(sorted) > 1 {
 		margin = tCritical95(len(sorted)-1) * standardDeviation /
 			math.Sqrt(float64(len(sorted)))
@@ -75,7 +85,7 @@ func stats(values []float64) Stats {
 		N: len(sorted), Min: sorted[0], Max: sorted[len(sorted)-1], Mean: mean,
 		StdDev: standardDeviation, Median: percentile(sorted, 0.5),
 		P95: percentile(sorted, 0.95), CI95Low: mean - margin,
-		CI95High: mean + margin,
+		CI95High: mean + margin, CI95Valid: validInterval,
 	}
 }
 

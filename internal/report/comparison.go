@@ -59,12 +59,23 @@ func samplingReliable(
 	if intervalSeconds <= 0 {
 		return true
 	}
-	minimum := intervalSeconds * 2
 	for _, benchmark := range []model.Benchmark{baseline, candidate} {
-		for _, run := range benchmark.Runs {
-			if run.WallSeconds < minimum {
-				return false
-			}
+		if !benchmarkSamplesReliable(benchmark, intervalSeconds) {
+			return false
+		}
+	}
+	return true
+}
+
+func benchmarkSamplesReliable(benchmark model.Benchmark, intervalSeconds float64) bool {
+	if intervalSeconds <= 0 {
+		return true
+	}
+	minimum := intervalSeconds * 2
+	for _, run := range benchmark.Runs {
+		if run.WallSeconds < minimum || run.SampleCount < 2 ||
+			run.SampleCoverageSeconds < intervalSeconds {
+			return false
 		}
 	}
 	return true
@@ -96,6 +107,9 @@ func comparisonStatus(stats model.Stats, direction metricDirection) (string, str
 		return "same", "neutral"
 	}
 	if direction == neutralDirection {
+		if math.Abs(stats.Mean) < 1e-15 {
+			return "same point estimate", "neutral"
+		}
 		if stats.Mean < 0 {
 			return "lower", "neutral"
 		}
@@ -119,7 +133,7 @@ func formatDelta(delta deltaResult, row metricRow) string {
 }
 
 func formatDeltaInterval(delta deltaResult, row metricRow) string {
-	if delta.difference.N < 2 {
+	if !delta.difference.CI95Valid {
 		return "insufficient paired runs"
 	}
 	return fmt.Sprintf(

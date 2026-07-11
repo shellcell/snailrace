@@ -25,6 +25,16 @@ func TestFixedDurationTUIStopsProcessGroup(t *testing.T) {
 	}
 }
 
+func TestFixedDurationTUIRejectsEarlyExit(t *testing.T) {
+	_, err := runTUIOnce(
+		context.Background(), Spec{Name: "true", Args: []string{"/bin/true"}},
+		time.Millisecond, Options{TUI: true, Duration: 50 * time.Millisecond},
+	)
+	if err == nil {
+		t.Fatal("early fixed-duration exit should invalidate the run")
+	}
+}
+
 func TestTerminalSizeOverridesDimensions(t *testing.T) {
 	width, height := ResolveTerminalSize(132, 43)
 	if width != 132 || height != 43 {

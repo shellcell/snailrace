@@ -61,7 +61,8 @@ func writeText(writer io.Writer, report model.Report) error {
 	fmt.Fprintln(w, "Statistical detail\t")
 	for index, benchmark := range report.Benchmarks {
 		writeTextBenchmark(
-			w, report.Host.OS, benchmark, index == baselineIndex(report),
+			w, report.Host.OS, report.Config.IntervalMS/1000,
+			benchmark, index == baselineIndex(report),
 		)
 	}
 	for _, note := range report.Notes {
@@ -81,6 +82,7 @@ func writeText(writer io.Writer, report model.Report) error {
 func writeTextBenchmark(
 	w io.Writer,
 	operatingSystem string,
+	intervalSeconds float64,
 	benchmark model.Benchmark,
 	baseline bool,
 ) {
@@ -104,6 +106,14 @@ func writeTextBenchmark(
 		formatBytes(float64(benchmark.Tool.DiskFootprintBytes)),
 		len(benchmark.Tool.LinkedFiles),
 	)
+	fmt.Fprintf(
+		w, "Sampling observations\t%s valid, %s mean observed coverage\n",
+		formatCount(benchmark.Summary.ValidSampleCount.Mean),
+		formatDuration(benchmark.Summary.SampleCoverageSeconds.Mean),
+	)
+	if !benchmarkSamplesReliable(benchmark, intervalSeconds) {
+		fmt.Fprintln(w, "Sampling quality\tLIMITED: fewer than two valid samples or intervals")
+	}
 	fmt.Fprintln(w, "Metric\tMean ± σ\t95% CI mean\tMedian\tP95\tRange")
 	for _, row := range metricRows {
 		if !available(row, operatingSystem) {
@@ -112,9 +122,9 @@ func writeTextBenchmark(
 		}
 		value := row.stats(benchmark.Summary)
 		fmt.Fprintf(
-			w, "%s\t%s ± %s\t[%s, %s]\t%s\t%s\t%s .. %s\n",
+			w, "%s\t%s ± %s\t%s\t%s\t%s\t%s .. %s\n",
 			row.name, row.format(value.Mean), row.format(value.StdDev),
-			row.format(value.CI95Low), row.format(value.CI95High),
+			formatConfidence(value, row.format),
 			row.format(value.Median), row.format(value.P95),
 			row.format(value.Min), row.format(value.Max),
 		)

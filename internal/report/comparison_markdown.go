@@ -31,7 +31,7 @@ func writeMarkdownComparison(writer io.Writer, report model.Report) {
 			float64(candidate.Tool.DiskFootprintBytes),
 		)
 		fmt.Fprintf(
-			writer, "| Linked footprint | %s | %s | %s | exact metadata |\n",
+			writer, "| Linked footprint | %s | %s | %s | static discovery |\n",
 			formatBytes(float64(baseline.Tool.DiskFootprintBytes)),
 			formatBytes(float64(candidate.Tool.DiskFootprintBytes)), staticDelta,
 		)

@@ -70,3 +70,28 @@ func TestChartLegendsUseToolIdentityColors(t *testing.T) {
 		}
 	}
 }
+
+func TestSingleRunDistributionOmitsUndefinedConfidenceWhisker(t *testing.T) {
+	report := model.Report{
+		Config:     model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{benchmarkWithWallTimes("tool", 1)},
+	}
+	chart := absoluteDistributionChart(report, chartMetricDefinitions()[0])
+	if strings.Contains(chart.body, `stroke="#eceff4"`) {
+		t.Fatal("one observation should not render a confidence whisker")
+	}
+}
+
+func TestFixedTUIRankingChartUsesCPUUnits(t *testing.T) {
+	report := model.Report{
+		Config: model.Config{Mode: "tui", DurationSeconds: 1, Baseline: 1},
+		Benchmarks: []model.Benchmark{
+			benchmarkWithWallTimes("first", 1), benchmarkWithWallTimes("second", 1),
+		},
+	}
+	charts := rankingCharts(report)
+	if len(charts) < 2 || charts[1].title != "CPU" ||
+		!strings.Contains(charts[1].body, "%") {
+		t.Fatal("fixed TUI primary ranking chart should show average CPU percentage")
+	}
+}

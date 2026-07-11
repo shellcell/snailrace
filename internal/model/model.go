@@ -13,6 +13,10 @@ type Config struct {
 	TerminalHeight    uint16        `json:"terminal_height,omitempty"`
 	TerminalInherited bool          `json:"terminal_inherited,omitempty"`
 	Baseline          int           `json:"baseline"`
+	BaselineAutomatic bool          `json:"baseline_automatic"`
+	OrderSeed         int64         `json:"order_seed"`
+	OrderMethod       string        `json:"order_method"`
+	OutputMode        string        `json:"output_mode"`
 }
 
 type HostInfo struct {
@@ -45,45 +49,52 @@ type DiskFile struct {
 }
 
 type Run struct {
-	Index               int     `json:"index"`
-	ExitCode            int     `json:"exit_code"`
-	WallSeconds         float64 `json:"wall_seconds"`
-	CPUUserSeconds      float64 `json:"cpu_user_seconds"`
-	CPUSystemSeconds    float64 `json:"cpu_system_seconds"`
-	AverageCPUPercent   float64 `json:"average_cpu_percent"`
-	PeakResidentBytes   float64 `json:"peak_resident_bytes"`
-	MeanResidentBytes   float64 `json:"mean_resident_bytes"`
-	PeakVirtualBytes    float64 `json:"peak_virtual_bytes"`
-	PeakProcesses       float64 `json:"peak_processes"`
-	PeakThreads         float64 `json:"peak_threads"`
-	PeakFileDescriptors float64 `json:"peak_file_descriptors"`
-	StopReason          string  `json:"stop_reason"`
+	Index                 int     `json:"index"`
+	ExitCode              int     `json:"exit_code"`
+	WallSeconds           float64 `json:"wall_seconds"`
+	CPUUserSeconds        float64 `json:"cpu_user_seconds"`
+	CPUSystemSeconds      float64 `json:"cpu_system_seconds"`
+	AverageCPUPercent     float64 `json:"average_cpu_percent"`
+	PeakResidentBytes     float64 `json:"peak_resident_bytes"`
+	WaitedMaxRSSBytes     float64 `json:"waited_process_max_rss_bytes"`
+	MeanResidentBytes     float64 `json:"mean_resident_bytes"`
+	PeakVirtualBytes      float64 `json:"peak_virtual_bytes"`
+	PeakProcesses         float64 `json:"peak_processes"`
+	PeakThreads           float64 `json:"peak_threads"`
+	PeakFileDescriptors   float64 `json:"peak_file_descriptors"`
+	StopReason            string  `json:"stop_reason"`
+	SampleCount           int     `json:"valid_sample_count"`
+	SampleCoverageSeconds float64 `json:"sample_coverage_seconds"`
 }
 
 type Stats struct {
-	N        int     `json:"n"`
-	Min      float64 `json:"min"`
-	Max      float64 `json:"max"`
-	Mean     float64 `json:"mean"`
-	StdDev   float64 `json:"stddev"`
-	Median   float64 `json:"median"`
-	P95      float64 `json:"p95"`
-	CI95Low  float64 `json:"ci95_low"`
-	CI95High float64 `json:"ci95_high"`
+	N         int     `json:"n"`
+	Min       float64 `json:"min"`
+	Max       float64 `json:"max"`
+	Mean      float64 `json:"mean"`
+	StdDev    float64 `json:"stddev"`
+	Median    float64 `json:"median"`
+	P95       float64 `json:"p95"`
+	CI95Low   float64 `json:"-"`
+	CI95High  float64 `json:"-"`
+	CI95Valid bool    `json:"ci95_valid"`
 }
 
 type Summary struct {
-	WallSeconds         Stats `json:"wall_seconds"`
-	CPUTotalSeconds     Stats `json:"cpu_total_seconds"`
-	CPUUserSeconds      Stats `json:"cpu_user_seconds"`
-	CPUSystemSeconds    Stats `json:"cpu_system_seconds"`
-	AverageCPUPercent   Stats `json:"average_cpu_percent"`
-	PeakResidentBytes   Stats `json:"peak_resident_bytes"`
-	MeanResidentBytes   Stats `json:"mean_resident_bytes"`
-	PeakVirtualBytes    Stats `json:"peak_virtual_bytes"`
-	PeakProcesses       Stats `json:"peak_processes"`
-	PeakThreads         Stats `json:"peak_threads"`
-	PeakFileDescriptors Stats `json:"peak_file_descriptors"`
+	WallSeconds           Stats `json:"wall_seconds"`
+	CPUTotalSeconds       Stats `json:"cpu_total_seconds"`
+	CPUUserSeconds        Stats `json:"cpu_user_seconds"`
+	CPUSystemSeconds      Stats `json:"cpu_system_seconds"`
+	AverageCPUPercent     Stats `json:"average_cpu_percent"`
+	PeakResidentBytes     Stats `json:"peak_resident_bytes"`
+	WaitedMaxRSSBytes     Stats `json:"waited_process_max_rss_bytes"`
+	MeanResidentBytes     Stats `json:"mean_resident_bytes"`
+	PeakVirtualBytes      Stats `json:"peak_virtual_bytes"`
+	PeakProcesses         Stats `json:"peak_processes"`
+	PeakThreads           Stats `json:"peak_threads"`
+	PeakFileDescriptors   Stats `json:"peak_file_descriptors"`
+	ValidSampleCount      Stats `json:"valid_sample_count"`
+	SampleCoverageSeconds Stats `json:"sample_coverage_seconds"`
 }
 
 type Benchmark struct {

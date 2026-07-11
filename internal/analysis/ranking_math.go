@@ -62,9 +62,13 @@ func geometricMean(values []float64) float64 {
 
 func samplesReliable(config model.Config, benchmarks []model.Benchmark) bool {
 	minimum := config.IntervalMS / 1000 * 2
+	if minimum <= 0 {
+		return true
+	}
 	for _, benchmark := range benchmarks {
 		for _, run := range benchmark.Runs {
-			if minimum > 0 && run.WallSeconds < minimum {
+			if run.WallSeconds < minimum || run.SampleCount < 2 ||
+				run.SampleCoverageSeconds < config.IntervalMS/1000 {
 				return false
 			}
 		}
@@ -79,6 +83,18 @@ func hasPositive(values []float64) bool {
 		}
 	}
 	return false
+}
+
+func allPositive(values []float64) bool {
+	if len(values) == 0 {
+		return false
+	}
+	for _, value := range values {
+		if value <= 0 || math.IsInf(value, 0) || math.IsNaN(value) {
+			return false
+		}
+	}
+	return true
 }
 
 func rankOf(values []float64, target int) int {

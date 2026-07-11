@@ -2,6 +2,7 @@ package report
 
 import (
 	"fmt"
+	"strings"
 
 	"perftool/internal/model"
 )
@@ -21,14 +22,14 @@ func rankingWinners(report model.Report, ranking rankingData) []categoryWinner {
 		}, func(row rankingRow) string {
 			return ranking.primaryUnit(row.primaryValue)
 		}),
-		winnerForRank(report, ranking.rows, "CPU COST", func(row rankingRow) int {
-			return row.cpuRank
-		}, func(row rankingRow) string {
-			if report.Config.Mode == "tui" && report.Config.DurationSeconds > 0 {
-				return formatPercent(row.cpuValue)
-			}
-			return formatDuration(row.cpuValue)
-		}),
+	}
+	if !(report.Config.Mode == "tui" && report.Config.DurationSeconds > 0) {
+		winners = append(winners, winnerForRank(
+			report, ranking.rows, "CPU COST", func(row rankingRow) int {
+				return row.cpuRank
+			}, func(row rankingRow) string {
+				return formatDuration(row.cpuValue)
+			}))
 	}
 	if ranking.ramAvailable {
 		winners = append(winners, winnerForRank(
@@ -52,13 +53,32 @@ func winnerForRank(
 	rank func(rankingRow) int,
 	value func(rankingRow) string,
 ) categoryWinner {
+	var benchmarks []int
 	for _, row := range rows {
 		if rank(row) == 1 {
-			return categoryWinner{
-				category: category, tool: report.Benchmarks[row.benchmark].Tool.Name,
-				value: value(row),
+			benchmarks = append(benchmarks, row.benchmark)
+		}
+	}
+	result := categoryWinner{category: category, benchmarks: benchmarks}
+	if len(benchmarks) > 0 {
+		for _, row := range rows {
+			if row.benchmark == benchmarks[0] {
+				result.value = value(row)
+				break
 			}
 		}
 	}
-	return categoryWinner{category: category}
+	return result
+}
+
+func winnerNames(report model.Report, winner categoryWinner, baseline bool) string {
+	names := make([]string, 0, len(winner.benchmarks))
+	for _, index := range winner.benchmarks {
+		name := report.Benchmarks[index].Tool.Name
+		if baseline && index == baselineIndex(report) {
+			name += " [BASELINE]"
+		}
+		names = append(names, name)
+	}
+	return strings.Join(names, " / ")
 }

@@ -18,12 +18,3 @@ func htmlToolLabel(report model.Report, index int, badge bool) string {
 	}
 	return label
 }
-
-func benchmarkIndexByName(report model.Report, name string) int {
-	for index, benchmark := range report.Benchmarks {
-		if benchmark.Tool.Name == name {
-			return index
-		}
-	}
-	return 0
-}

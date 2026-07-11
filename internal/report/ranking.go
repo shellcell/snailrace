@@ -10,6 +10,8 @@ func calculateRanking(report model.Report) rankingData {
 	result := rankingData{
 		rows:         make([]rankingRow, len(numeric.Rows)),
 		ramAvailable: numeric.RAMAvailable, bestOverall: numeric.BestOverall,
+		primaryRatio: numeric.PrimaryRatio, cpuRatio: numeric.CPURatio,
+		footprintRatio: numeric.FootprintRatio,
 	}
 	for index, row := range numeric.Rows {
 		result.rows[index] = rankingRow{

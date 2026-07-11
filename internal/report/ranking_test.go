@@ -18,7 +18,7 @@ func TestAutomaticBaselineUsesBalancedWinner(t *testing.T) {
 		t.Fatalf("baseline = %d, want efficient tool at index 3", got)
 	}
 	ranking := calculateRanking(model.Report{Config: config, Benchmarks: benchmarks})
-	if ranking.winners[1].tool != "fast" || ranking.winners[2].tool != "efficient" {
+	if ranking.winners[1].benchmarks[0] != 0 || ranking.winners[2].benchmarks[0] != 2 {
 		t.Fatalf("unexpected category winners: %+v", ranking.winners)
 	}
 	if ranking.rows[0].overallScore/ranking.bestOverall != 1 {
@@ -39,6 +39,35 @@ func TestCompositeRAMWinnerIsNormalizedToOne(t *testing.T) {
 		if row.ramRank == 1 && row.ramScore != 1 {
 			t.Fatalf("RAM winner score = %g, want 1", row.ramScore)
 		}
+	}
+}
+
+func TestRankingReportsAllExactTies(t *testing.T) {
+	benchmarks := []model.Benchmark{
+		rankingBenchmark("first", 1, 1, 100, 100, 100),
+		rankingBenchmark("second", 1, 1, 100, 100, 100),
+	}
+	ranking := calculateRanking(model.Report{
+		Config: model.Config{Mode: "command"}, Benchmarks: benchmarks,
+	})
+	if len(ranking.winners[0].benchmarks) != 2 {
+		t.Fatalf("overall tied leaders = %v, want both tools", ranking.winners[0].benchmarks)
+	}
+}
+
+func TestZeroBestCategoryHasNoRatioDelta(t *testing.T) {
+	benchmarks := []model.Benchmark{
+		rankingBenchmark("zero CPU", 1, 0, 100, 100, 100),
+		rankingBenchmark("positive CPU", 1, 1, 100, 100, 100),
+	}
+	ranking := calculateRanking(model.Report{
+		Config: model.Config{Mode: "command"}, Benchmarks: benchmarks,
+	})
+	if ranking.cpuRatio {
+		t.Fatal("CPU ratio should be unavailable when the best value is zero")
+	}
+	if got := rankingCell("0 ns", ranking.rows[0].cpuScore, 1, false); got != "0 ns · Δ n/a (#1)" {
+		t.Fatalf("zero-best ranking cell = %q", got)
 	}
 }
 

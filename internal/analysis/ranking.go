@@ -8,10 +8,13 @@ import (
 )
 
 type Ranking struct {
-	Rows         []RankingRow
-	RAMAvailable bool
-	BestOverall  float64
-	FixedTUI     bool
+	Rows           []RankingRow
+	RAMAvailable   bool
+	BestOverall    float64
+	FixedTUI       bool
+	PrimaryRatio   bool
+	CPURatio       bool
+	FootprintRatio bool
 }
 
 type RankingRow struct {
@@ -57,13 +60,32 @@ func Calculate(config model.Config, benchmarks []model.Benchmark) Ranking {
 	if !hasPositive(meanRAM) || !hasPositive(peakRAM) {
 		result.RAMAvailable = false
 	}
+	result.RAMAvailable = result.RAMAvailable && allPositive(meanRAM) && allPositive(peakRAM)
+	result.PrimaryRatio = allPositive(primary)
+	result.CPURatio = allPositive(cpu)
+	result.FootprintRatio = allPositive(footprint)
 	primaryScore, cpuScore := normalized(primary), normalized(cpu)
 	ramScore := normalizedPair(meanRAM, peakRAM, result.RAMAvailable)
 	footprintScore := normalized(footprint)
 	for index := range result.Rows {
-		scores := []float64{primaryScore[index], cpuScore[index], footprintScore[index]}
+		var scores []float64
+		if result.PrimaryRatio {
+			scores = append(scores, primaryScore[index])
+		}
+		if result.CPURatio {
+			scores = append(scores, cpuScore[index])
+		}
+		if result.FootprintRatio {
+			scores = append(scores, footprintScore[index])
+		}
 		if result.FixedTUI {
-			scores = []float64{cpuScore[index], footprintScore[index]}
+			scores = nil
+			if result.CPURatio {
+				scores = append(scores, cpuScore[index])
+			}
+			if result.FootprintRatio {
+				scores = append(scores, footprintScore[index])
+			}
 		}
 		if result.RAMAvailable {
 			scores = append(scores, ramScore[index])

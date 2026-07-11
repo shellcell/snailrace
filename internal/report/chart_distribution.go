@@ -13,18 +13,22 @@ func absoluteDistributionChart(report model.Report, metric chartMetric) svgChart
 	if !available(metricRows[metric.row], report.Host.OS) {
 		return unavailableChart("RUN DISTRIBUTION · "+metric.name, report.Host.OS)
 	}
-	maximum := 0.0
+	minimum, maximum := 0.0, 0.0
 	for _, benchmark := range report.Benchmarks {
 		stats := metric.stats(benchmark)
-		maximum = math.Max(maximum, math.Max(stats.Max, stats.CI95High))
+		maximum = math.Max(maximum, stats.Max)
+		if stats.CI95Valid {
+			minimum = math.Min(minimum, stats.CI95Low)
+			maximum = math.Max(maximum, stats.CI95High)
+		}
 	}
-	if maximum <= 0 {
+	if maximum <= minimum {
 		maximum = 1
 	}
 	const left, plotWidth, rowHeight = 210, 390, 36
 	height := 68 + len(report.Benchmarks)*rowHeight
 	position := func(value float64) float64 {
-		return left + math.Max(0, value)/maximum*plotWidth
+		return left + (value-minimum)/(maximum-minimum)*plotWidth
 	}
 	var body strings.Builder
 	body.WriteString(svgChartStyle)
@@ -37,9 +41,9 @@ func absoluteDistributionChart(report model.Report, metric chartMetric) svgChart
 	)
 	fmt.Fprintf(
 		&body,
-		`<text x="%d" y="59" class="value">0</text>`+
+		`<text x="%d" y="59" class="value">%s</text>`+
 			`<text x="%d" y="59" text-anchor="end" class="value">%s</text>`,
-		left, left+plotWidth, metric.format(maximum),
+		left, metric.format(minimum), left+plotWidth, metric.format(maximum),
 	)
 	baseline := baselineIndex(report)
 	for index, benchmark := range report.Benchmarks {
@@ -60,15 +64,20 @@ func absoluteDistributionChart(report model.Report, metric chartMetric) svgChart
 			)
 		}
 		stats := metric.stats(benchmark)
-		low, high := position(stats.CI95Low), position(stats.CI95High)
 		mean := position(stats.Mean)
+		if stats.CI95Valid {
+			low, high := position(stats.CI95Low), position(stats.CI95High)
+			fmt.Fprintf(
+				&body,
+				`<path d="M %.1f %d H %.1f M %.1f %d v 10 M %.1f %d v 10" `+
+					`stroke="#eceff4" stroke-width="1.5"/>`,
+				low, y-4, high, low, y-9, high, y-9,
+			)
+		}
 		fmt.Fprintf(
 			&body,
-			`<path d="M %.1f %d H %.1f M %.1f %d v 10 M %.1f %d v 10" `+
-				`stroke="#eceff4" stroke-width="1.5"/>`+
-				`<path d="M %.1f %d l 6 6 -6 6 -6 -6 z" fill="%s"/>`+
+			`<path d="M %.1f %d l 6 6 -6 6 -6 -6 z" fill="%s"/>`+
 				`<text x="620" y="%d" class="value">%s</text>`,
-			low, y-4, high, low, y-9, high, y-9,
 			mean, y-10, color, y, metric.format(stats.Mean),
 		)
 	}

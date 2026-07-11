@@ -28,11 +28,13 @@ var metricRows = []metricRow{
 	{"CPU system", func(s model.Summary) model.Stats { return s.CPUSystemSeconds }, formatDuration, false,
 		func(r model.Run) float64 { return r.CPUSystemSeconds }, lowerIsBetter, false},
 	{"Average CPU", func(s model.Summary) model.Stats { return s.AverageCPUPercent }, formatPercent, false,
-		func(r model.Run) float64 { return r.AverageCPUPercent }, lowerIsBetter, false},
+		func(r model.Run) float64 { return r.AverageCPUPercent }, neutralDirection, false},
 	{"Mean resident", func(s model.Summary) model.Stats { return s.MeanResidentBytes }, formatBytes, false,
 		func(r model.Run) float64 { return r.MeanResidentBytes }, lowerIsBetter, true},
 	{"Peak resident", func(s model.Summary) model.Stats { return s.PeakResidentBytes }, formatBytes, false,
 		func(r model.Run) float64 { return r.PeakResidentBytes }, lowerIsBetter, true},
+	{"Waited process max RSS", func(s model.Summary) model.Stats { return s.WaitedMaxRSSBytes }, formatBytes, false,
+		func(r model.Run) float64 { return r.WaitedMaxRSSBytes }, lowerIsBetter, false},
 	{"Peak virtual", func(s model.Summary) model.Stats { return s.PeakVirtualBytes }, formatBytes, false,
 		func(r model.Run) float64 { return r.PeakVirtualBytes }, lowerIsBetter, true},
 	{"Peak processes", func(s model.Summary) model.Stats { return s.PeakProcesses }, formatCount, false,
@@ -69,6 +71,13 @@ func formatBytes(value float64) string {
 func formatCount(value float64) string { return formatNumber(value) }
 
 func formatPercent(value float64) string { return formatNumber(value) + "%" }
+
+func formatConfidence(stats model.Stats, format func(float64) string) string {
+	if !stats.CI95Valid {
+		return "N/A (n < 2)"
+	}
+	return "[" + format(stats.CI95Low) + ", " + format(stats.CI95High) + "]"
+}
 
 func formatSignedPercent(value float64) string {
 	prefix := "+"

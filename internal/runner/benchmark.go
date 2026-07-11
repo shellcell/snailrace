@@ -25,7 +25,12 @@ func Benchmark(
 		}
 		benchmarks[index].Tool = tool
 		progress.setTool(index, tool)
-		for warmup := 0; warmup < config.Warmups; warmup++ {
+	}
+	for warmup, order := range balancedSchedule(
+		len(specs), config.Warmups, config.OrderSeed^0x5deece66d,
+	) {
+		for _, index := range order {
+			spec := specs[index]
 			progress.update(
 				index, spec.Name, warmup+1, config.Warmups, true, false, nil,
 			)
@@ -40,10 +45,10 @@ func Benchmark(
 		}
 	}
 
-	// Rotate execution order to distribute first/last-run bias across commands.
-	for runIndex := 0; runIndex < config.Runs; runIndex++ {
-		for offset := range specs {
-			index := (runIndex + offset) % len(specs)
+	for runIndex, order := range balancedSchedule(
+		len(specs), config.Runs, config.OrderSeed,
+	) {
+		for _, index := range order {
 			progress.update(
 				index, specs[index].Name, runIndex+1, config.Runs,
 				false, false, benchmarks[index].Runs,

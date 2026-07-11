@@ -22,16 +22,16 @@ func rankingCharts(report model.Report) []svgChart {
 		{"BALANCED INDEX", formatScore,
 			func(row rankingRow) float64 { return row.overallScore },
 			func(row rankingRow) int { return row.overallRank }},
-		{"TIME", formatDuration,
+		{ranking.primaryLabel, ranking.primaryUnit,
 			func(row rankingRow) float64 { return row.primaryValue },
 			func(row rankingRow) int { return row.primaryRank }},
-		{"CPU COST", func(value float64) string {
-			if report.Config.Mode == "tui" && report.Config.DurationSeconds > 0 {
-				return formatPercent(value)
-			}
-			return formatDuration(value)
-		}, func(row rankingRow) float64 { return row.cpuValue },
-			func(row rankingRow) int { return row.cpuRank }},
+	}
+	if !(report.Config.Mode == "tui" && report.Config.DurationSeconds > 0) {
+		metrics = append(metrics, rankingChartMetric{
+			"CPU COST", formatDuration,
+			func(row rankingRow) float64 { return row.cpuValue },
+			func(row rankingRow) int { return row.cpuRank },
+		})
 	}
 	if ranking.ramAvailable {
 		metrics = append(metrics, rankingChartMetric{
@@ -72,7 +72,7 @@ func rankingBarChart(
 		&body,
 		`<rect width="100%%" height="100%%" rx="8" fill="#3b4252"/>`+
 			`<text x="16" y="23" class="title">RANKING · %s</text>`+
-			`<text x="16" y="41" class="subtitle">lower is better · outline = category winner</text>`,
+			`<text x="16" y="41" class="subtitle">descriptive point estimates · outline = category leader</text>`,
 		html.EscapeString(metric.name),
 	)
 	for index, row := range ranking.rows {

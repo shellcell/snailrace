@@ -14,7 +14,7 @@ func DefaultInterval() time.Duration { return 10 * time.Millisecond }
 
 func SampleImmediately() bool { return true }
 
-func SampleTree(rootPID int) Metrics {
+func SampleTree(rootPID int) (Metrics, bool) {
 	seen := make(map[int]bool)
 	queue := []int{rootPID}
 	var total Metrics
@@ -27,6 +27,9 @@ func SampleTree(rootPID int) Metrics {
 		seen[pid] = true
 		record, err := readProcess(pid)
 		if err != nil {
+			if pid == rootPID {
+				return Metrics{}, false
+			}
 			continue
 		}
 		total.ResidentBytes += record.ResidentBytes
@@ -36,22 +39,28 @@ func SampleTree(rootPID int) Metrics {
 		total.FileDescriptors += record.FileDescriptors
 		queue = append(queue, readChildren(pid)...)
 	}
-	return total
+	return total, true
 }
 
 func readChildren(pid int) []int {
-	path := filepath.Join(
-		"/proc", strconv.Itoa(pid), "task", strconv.Itoa(pid), "children",
-	)
-	data, err := os.ReadFile(path)
+	taskDirectory := filepath.Join("/proc", strconv.Itoa(pid), "task")
+	tasks, err := os.ReadDir(taskDirectory)
 	if err != nil {
 		return nil
 	}
+	seen := make(map[int]bool)
 	children := make([]int, 0, 2)
-	for _, field := range strings.Fields(string(data)) {
-		child, err := strconv.Atoi(field)
-		if err == nil {
-			children = append(children, child)
+	for _, task := range tasks {
+		data, readErr := os.ReadFile(filepath.Join(taskDirectory, task.Name(), "children"))
+		if readErr != nil {
+			continue
+		}
+		for _, field := range strings.Fields(string(data)) {
+			child, parseErr := strconv.Atoi(field)
+			if parseErr == nil && !seen[child] {
+				seen[child] = true
+				children = append(children, child)
+			}
 		}
 	}
 	return children

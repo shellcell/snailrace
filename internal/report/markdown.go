@@ -37,7 +37,8 @@ func WriteMarkdownWithCharts(
 	fmt.Fprintln(writer, "## Statistical Detail")
 	for index, benchmark := range report.Benchmarks {
 		writeMarkdownBenchmark(
-			writer, report.Host.OS, benchmark, index == baselineIndex(report),
+			writer, report.Host.OS, report.Config.IntervalMS/1000,
+			benchmark, index == baselineIndex(report),
 		)
 	}
 	fmt.Fprintln(writer, "## Environment")
@@ -61,6 +62,7 @@ func WriteMarkdownWithCharts(
 func writeMarkdownBenchmark(
 	writer io.Writer,
 	operatingSystem string,
+	intervalSeconds float64,
 	benchmark model.Benchmark,
 	baseline bool,
 ) {
@@ -80,6 +82,18 @@ func writeMarkdownBenchmark(
 		formatBytes(float64(benchmark.Tool.DiskFootprintBytes)),
 		len(benchmark.Tool.LinkedFiles),
 	)
+	fmt.Fprintf(
+		writer, "Sampling observations: %s valid, %s mean observed coverage.  \n\n",
+		formatCount(benchmark.Summary.ValidSampleCount.Mean),
+		formatDuration(benchmark.Summary.SampleCoverageSeconds.Mean),
+	)
+	if !benchmarkSamplesReliable(benchmark, intervalSeconds) {
+		fmt.Fprintln(
+			writer,
+			"> Sampling quality: **LIMITED** (fewer than two valid samples or intervals).",
+		)
+		fmt.Fprintln(writer)
+	}
 	fmt.Fprintln(
 		writer,
 		"| Metric | Mean ± σ | 95% CI mean | Median | P95 | Range |",
@@ -92,9 +106,9 @@ func writeMarkdownBenchmark(
 		}
 		value := row.stats(benchmark.Summary)
 		fmt.Fprintf(
-			writer, "| %s | %s ± %s | [%s, %s] | %s | %s | %s .. %s |\n",
+			writer, "| %s | %s ± %s | %s | %s | %s | %s .. %s |\n",
 			row.name, row.format(value.Mean), row.format(value.StdDev),
-			row.format(value.CI95Low), row.format(value.CI95High),
+			formatConfidence(value, row.format),
 			row.format(value.Median), row.format(value.P95),
 			row.format(value.Min), row.format(value.Max),
 		)

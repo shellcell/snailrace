@@ -1,7 +1,9 @@
 package model
 
 import (
+	"encoding/json"
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -17,16 +19,27 @@ func TestSummarizeUsesSampleStatistics(t *testing.T) {
 	assertClose(t, result.P95, 4.8)
 	assertClose(t, result.CI95Low, 1.0367568385)
 	assertClose(t, result.CI95High, 4.9632431615)
+	if !result.CI95Valid {
+		t.Fatal("five observations should define a confidence interval")
+	}
 	if result.N != 5 {
 		t.Fatalf("N = %d, want 5", result.N)
 	}
 }
 
-func TestSingleObservationHasZeroWidthInterval(t *testing.T) {
+func TestSingleObservationHasNoConfidenceInterval(t *testing.T) {
 	result := Summarize([]Run{{WallSeconds: 2.5}}).WallSeconds
 	assertClose(t, result.StdDev, 0)
-	assertClose(t, result.CI95Low, 2.5)
-	assertClose(t, result.CI95High, 2.5)
+	if result.CI95Valid {
+		t.Fatal("one observation cannot define a Student's t interval")
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "ci95_low") {
+		t.Fatalf("undefined confidence bounds should be omitted: %s", encoded)
+	}
 }
 
 func assertClose(t *testing.T, got, want float64) {

@@ -48,6 +48,9 @@ func validateOptions(result options, commands []string, positional int) error {
 	if result.tui && commandCount > 1 && result.duration <= 0 {
 		return errors.New("TUI comparisons require a positive duration")
 	}
+	if result.tui && result.showOutput {
+		return errors.New("show-output does not apply to TUI mode")
+	}
 	if result.tui && result.duration == 0 && result.runs != 1 {
 		return errors.New("unlimited interactive TUI measurement requires one run")
 	}

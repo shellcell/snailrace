@@ -176,6 +176,19 @@ func writeHTMLBenchmark(
 		formatBytes(float64(benchmark.Tool.DiskFootprintBytes)),
 		len(benchmark.Tool.LinkedFiles),
 	)
+	fmt.Fprintf(
+		writer,
+		`<p class="muted">Sampling observations: %s valid, %s mean observed coverage.</p>`,
+		formatCount(benchmark.Summary.ValidSampleCount.Mean),
+		formatDuration(benchmark.Summary.SampleCoverageSeconds.Mean),
+	)
+	if !benchmarkSamplesReliable(benchmark, report.Config.IntervalMS/1000) {
+		fmt.Fprint(
+			writer,
+			`<p class="uncertain">Sampling quality: LIMITED `+
+				`(fewer than two valid samples or intervals).</p>`,
+		)
+	}
 	fmt.Fprint(writer, `<div class="scroll"><table><thead><tr><th>Metric</th>`+
 		`<th>Mean ± σ</th><th>95% CI mean</th><th>Median</th>`+
 		`<th>P95</th><th>Range</th></tr></thead><tbody>`)
@@ -203,10 +216,10 @@ func writeHTMLRow(
 	value := row.stats(summary)
 	fmt.Fprintf(
 		writer,
-		"<tr><td>%s</td><td>%s ± %s</td><td>[%s, %s]</td>"+
+		"<tr><td>%s</td><td>%s ± %s</td><td>%s</td>"+
 			"<td>%s</td><td>%s</td><td>%s .. %s</td></tr>",
 		row.name, row.format(value.Mean), row.format(value.StdDev),
-		row.format(value.CI95Low), row.format(value.CI95High),
+		formatConfidence(value, row.format),
 		row.format(value.Median), row.format(value.P95),
 		row.format(value.Min), row.format(value.Max),
 	)

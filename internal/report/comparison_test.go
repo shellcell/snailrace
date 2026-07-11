@@ -63,6 +63,23 @@ func TestShortRunsMarkSampledMetricsAsLimited(t *testing.T) {
 	}
 }
 
+func TestTooFewValidSamplesMarksMetricsAsLimited(t *testing.T) {
+	baseline := benchmarkWithWallTimes("baseline", 1, 1)
+	candidate := benchmarkWithWallTimes("candidate", 1, 1)
+	for index := range baseline.Runs {
+		baseline.Runs[index].SampleCount = 1
+		candidate.Runs[index].SampleCount = 1
+		baseline.Runs[index].MeanResidentBytes = 100
+		candidate.Runs[index].MeanResidentBytes = 200
+	}
+	baseline.Summary = model.Summarize(baseline.Runs)
+	candidate.Summary = model.Summarize(candidate.Runs)
+	delta := compareMetric(baseline, candidate, metricRows[5], 0.01)
+	if delta.status != "sampling-limited" {
+		t.Fatalf("status = %q, want sampling-limited", delta.status)
+	}
+}
+
 func benchmarkWithWallTimes(name string, values ...float64) model.Benchmark {
 	runs := make([]model.Run, len(values))
 	for index, value := range values {

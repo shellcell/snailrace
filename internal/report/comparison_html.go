@@ -14,7 +14,8 @@ func writeHTMLComparison(writer io.Writer, report model.Report) {
 	fmt.Fprintf(
 		writer,
 		`<section><h2>Detailed baseline deltas</h2><p class="muted">Baseline: `+
-			`<strong>%s</strong>. Δ status requires a paired 95%% interval.</p>`,
+			`<strong>%s</strong>. Better/worse requires a pointwise paired 95%% interval; `+
+			`higher/lower is descriptive.</p>`,
 		htmlToolLabel(report, baselinePosition, true),
 	)
 	for index, candidate := range report.Benchmarks {
@@ -61,7 +62,7 @@ func writeHTMLStaticFootprint(
 		`<tr><td>Linked footprint</td><td class="neutral">%s</td>`+
 			`<td class="%s">%s</td>`+
 			`<td><strong class="%s">%s</strong>`+
-			`<span class="delta muted">exact metadata</span></td></tr>`,
+			`<span class="delta muted">static discovery</span></td></tr>`,
 		formatBytes(float64(baseline.Tool.DiskFootprintBytes)),
 		class, formatBytes(float64(candidate.Tool.DiskFootprintBytes)),
 		class, html.EscapeString(delta),

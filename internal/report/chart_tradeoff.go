@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 
+	"perftool/internal/analysis"
 	"perftool/internal/model"
 )
 
@@ -41,8 +42,9 @@ func tradeoffCharts(report model.Report) []svgChart {
 	linked := tradeoffMetric{"Linked size", formatBytes, func(b model.Benchmark) float64 {
 		return float64(b.Tool.DiskFootprintBytes)
 	}}
-	pairs := [][2]tradeoffMetric{
-		{primary, cpu}, {primary, ram}, {primary, linked}, {cpu, ram},
+	pairs := [][2]tradeoffMetric{{primary, cpu}, {primary, linked}}
+	if analysis.Calculate(report.Config, report.Benchmarks).RAMAvailable {
+		pairs = append(pairs, [2]tradeoffMetric{primary, ram}, [2]tradeoffMetric{cpu, ram})
 	}
 	charts := make([]svgChart, 0, len(pairs))
 	for _, pair := range pairs {

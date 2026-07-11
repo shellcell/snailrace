@@ -1,8 +1,8 @@
 # snailrace
 
-`snailrace` is a Linux and macOS command benchmarker. It measures elapsed and
-CPU time exactly from child-process accounting and samples process-tree memory,
-processes, threads, and file descriptors where the OS exposes them.
+`snailrace` is a Linux and macOS command benchmarker. It measures elapsed time,
+uses OS-reported CPU accounting for the waited process, and samples process-tree
+memory, processes, threads, and file descriptors where the OS exposes them.
 
 ## Build
 
@@ -22,8 +22,8 @@ Benchmark a program directly, without shell parsing:
 ./snailrace -n 20 -warmups 3 -- gzip -k sample.txt
 ```
 
-Compare any number of shell commands. Execution order rotates each round to
-distribute ordering bias:
+Compare any number of shell commands. A recorded random seed drives
+counterbalanced execution blocks to reduce ordering bias:
 
 ```sh
 ./snailrace -n 20 -c 'grep needle data.txt' -c 'rg needle data.txt'
@@ -105,6 +105,9 @@ first two tools, such as `snail-grep-vs-ripgrep-20260711-140509.txt`.
 
 Reports include minimum, maximum, arithmetic mean, sample standard deviation,
 median, p95, and a two-sided 95% Student's t confidence interval for the mean.
+The interval is reported only with at least two observations.
+Critical values are tabulated through 30 degrees of freedom and use a
+high-accuracy Cornish-Fisher approximation above that.
 Quantiles use R-7 linear interpolation. No observations are removed as
 outliers. A confidence interval characterizes run-to-run sampling uncertainty;
 it does not remove systematic error or prove that observations are independent.
@@ -115,13 +118,19 @@ entirely favorable or unfavorable; otherwise the result is inconclusive. With
 fewer than two paired runs it is always inconclusive. Process and thread counts
 are labeled only higher/lower because fewer is not inherently better.
 Sampled resource metrics are marked `sampling-limited` rather than better/worse
-if any compared run lasts less than two process-sampling intervals.
+unless every compared run spans two intervals and has two valid samples.
 Resource-cost better/worse labels assume every command performs equivalent work.
+Intervals are pointwise and unadjusted for multiple comparisons. Comparisons to
+an automatically selected baseline are exploratory post-selection inference.
 
 The automatic baseline is the lowest balanced index. That index is an
 equal-weight geometric mean of normalized elapsed time, CPU cost, RAM cost, and
 linked disk footprint; unavailable or sampling-limited categories are omitted.
-Reports also name independent time, CPU, RAM, and linked-size winners. Ranking
+Categories containing nonpositive values are also omitted because cost ratios
+to a zero best value are undefined.
+Fixed-duration TUI ranking replaces elapsed/total CPU with one average-CPU
+category because the configured active duration is shared.
+Reports also name descriptive time, CPU, RAM, and linked-size leaders. Ranking
 cells show the measured value, percentage from that category's
 best result, and category rank.
 
@@ -135,25 +144,29 @@ Nord-derived tool palette consistently in command legends, ranking bars,
 scatter legends, chart labels, and live progress. Colors remain stable by
 command order; baseline badges and references use Frost blue.
 
-Elapsed time uses Go's monotonic clock. CPU time and fallback maximum RSS use
-the OS child resource record. Other peaks are sampled, so a process that starts
+Elapsed time uses Go's monotonic clock. CPU time and waited-process maximum RSS
+use the OS child resource record. Aggregate tree RSS is sampled separately and
+can double-count shared pages. Other peaks are sampled, so a process that starts
 and exits within one sampling interval can be missed. Lower intervals improve
 temporal resolution but increase observer CPU use and perturb short benchmarks.
 Average CPU is total user plus system CPU time divided by wall time and may
-exceed 100% for multithreaded programs. Mean resident memory is the arithmetic
-mean of equally spaced process-tree samples.
+exceed 100% for multithreaded programs; outside equal-duration experiments it
+is descriptive rather than inherently better or worse. Mean resident memory is
+the arithmetic mean of valid process-tree samples.
 
-For fixed-duration TUI runs, measurement ends when termination begins. CPU
-accounting necessarily includes the usually small graceful-shutdown interval.
+Fixed-duration TUI runs require the process to survive to the deadline. Their
+reported launch-to-exit window includes the graceful-shutdown interval so wall,
+CPU, and sampled resources cover the same interval.
 An unlimited interactive TUI result describes that user session and is useful
 as a profile, but it is not a reproducible benchmark unless the input is
 controlled.
 
-Linux sampling walks only `/proc/<pid>/task/<pid>/children` for the measured
-tree. macOS uses `ps`, so its default interval is deliberately coarser and does
-not report open descriptor counts.
+Linux sampling walks every task's `children` file for each discovered process.
+The snapshot remains best-effort under process exit and reparenting races.
+macOS uses `ps`, so its default interval is deliberately coarser and does not
+report open descriptor counts.
 
-Tool metadata records the executable size, every statically discoverable linked
+Tool metadata estimates the executable size and statically discoverable linked
 library and its size, and their deduplicated total footprint. Runtime-loaded
 plugins and executables launched later by children are not included in that
 static footprint and are identified as a limitation in reports.

@@ -68,25 +68,26 @@ func runTUIOnce(
 	waitErr, elapsed, reason := waitForTUI(
 		ctx, cmd, options.Duration, started, waitDone,
 	)
+	signalProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
 	close(stopMonitor)
 	peak := <-monitorDone
 	user, system, rusageRSS := platform.ResourceUsage(cmd.ProcessState)
-	peak.ResidentBytes = max(peak.ResidentBytes, rusageRSS)
 	peak.Processes = max(peak.Processes, 1)
 	peak.Threads = max(peak.Threads, 1)
 	if ctx.Err() != nil {
 		return model.Run{}, ctx.Err()
 	}
+	if options.Duration > 0 && reason == "exited" {
+		return model.Run{}, errors.New("TUI exited before the fixed duration")
+	}
 	if waitErr != nil && reason == "exited" {
-		if _, ok := waitErr.(*exec.ExitError); !ok {
-			return model.Run{}, waitErr
-		}
+		return model.Run{}, waitErr
 	}
 	select {
 	case <-outputDone:
 	case <-time.After(100 * time.Millisecond):
 	}
-	return makeTUIRun(cmd, elapsed, user, system, peak, reason), nil
+	return makeTUIRun(cmd, elapsed, user, system, rusageRSS, peak, reason), nil
 }
 
 func waitForTUI(
@@ -118,14 +119,13 @@ func waitForTUI(
 		signalProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
 		return <-waitDone, time.Since(started), "interrupted"
 	case <-timer.C:
-		elapsed := time.Since(started)
 		signalProcessGroup(cmd.Process.Pid, syscall.SIGTERM)
 		select {
 		case err := <-waitDone:
-			return err, elapsed, "duration"
+			return err, time.Since(started), "duration"
 		case <-time.After(time.Second):
 			signalProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
-			return <-waitDone, elapsed, "duration"
+			return <-waitDone, time.Since(started), "duration"
 		}
 	}
 }

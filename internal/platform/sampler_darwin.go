@@ -13,12 +13,12 @@ func DefaultInterval() time.Duration { return 50 * time.Millisecond }
 
 func SampleImmediately() bool { return false }
 
-func SampleTree(rootPID int) Metrics {
+func SampleTree(rootPID int) (Metrics, bool) {
 	output, err := exec.Command(
 		"/bin/ps", "-axo", "pid=,ppid=,rss=,vsz=,thcount=",
 	).Output()
 	if err != nil {
-		return Metrics{}
+		return Metrics{}, false
 	}
 	records := parseProcesses(output)
 	children := make(map[int][]int, len(records))
@@ -26,6 +26,7 @@ func SampleTree(rootPID int) Metrics {
 		children[record.PPID] = append(children[record.PPID], pid)
 	}
 	var total Metrics
+	foundRoot := false
 	seen := make(map[int]bool)
 	queue := []int{rootPID}
 	for len(queue) > 0 {
@@ -39,13 +40,16 @@ func SampleTree(rootPID int) Metrics {
 		if !ok {
 			continue
 		}
+		if pid == rootPID {
+			foundRoot = true
+		}
 		total.ResidentBytes += record.ResidentBytes
 		total.VirtualBytes += record.VirtualBytes
 		total.Processes++
 		total.Threads += record.Threads
 		queue = append(queue, children[pid]...)
 	}
-	return total
+	return total, foundRoot
 }
 
 func parseProcesses(output []byte) map[int]Process {

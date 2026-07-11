@@ -11,22 +11,26 @@ import (
 
 func writeHTMLRanking(writer io.Writer, report model.Report) {
 	ranking := calculateRanking(report)
-	baselineName := report.Benchmarks[baselineIndex(report)].Tool.Name
-	fmt.Fprint(writer, `<section><h2>Category winners</h2><div class="winner-grid">`)
+	fmt.Fprint(writer, `<section><h2>Category leaders (point estimates)</h2><div class="winner-grid">`)
 	for _, winner := range ranking.winners {
-		winnerIndex := benchmarkIndexByName(report, winner.tool)
-		name := htmlToolLabel(report, winnerIndex, winner.tool == baselineName)
+		var names string
+		for position, index := range winner.benchmarks {
+			if position > 0 {
+				names += " / "
+			}
+			names += htmlToolLabel(report, index, true)
+		}
 		fmt.Fprintf(
 			writer,
 			`<div class="winner"><small>%s</small><strong>%s</strong>`+
 				`<span class="muted">%s</span></div>`,
-			html.EscapeString(winner.category), name,
+			html.EscapeString(winner.category), names,
 			html.EscapeString(winner.value),
 		)
 	}
 	fmt.Fprintf(
 		writer,
-		`</div><h2>Overall ranking</h2><p class="muted">Comparison baseline: `+
+		`</div><h2>Overall ranking (point estimates)</h2><p class="muted">Comparison baseline: `+
 			`%s. Lower balanced index is better. Select a heading to sort.</p>`,
 		htmlToolLabel(report, baselineIndex(report), true),
 	)
@@ -43,7 +47,7 @@ func writeHTMLRanking(writer io.Writer, report model.Report) {
 		ramValue := "N/A"
 		if ranking.ramAvailable {
 			ramValue = rankingHTMLCell(
-				formatBytes(row.ramValue), row.ramScore, row.ramRank,
+				formatBytes(row.ramValue), row.ramScore, row.ramRank, true,
 			)
 		}
 		class := ""
@@ -65,21 +69,23 @@ func writeHTMLRanking(writer io.Writer, report model.Report) {
 			row.overallScore,
 			rankingHTMLCell(
 				formatScore(row.overallScore), row.overallScore/ranking.bestOverall,
-				row.overallRank,
+				row.overallRank, true,
 			),
 			row.primaryValue,
 			rankingHTMLCell(
 				ranking.primaryUnit(row.primaryValue), row.primaryScore,
-				row.primaryRank,
+				row.primaryRank, ranking.primaryRatio,
 			),
 			row.cpuValue,
-			rankingHTMLCell(cpuRankingValue(report, row), row.cpuScore, row.cpuRank),
+			rankingHTMLCell(
+				cpuRankingValue(report, row), row.cpuScore, row.cpuRank, ranking.cpuRatio,
+			),
 			row.ramValue,
 			ramValue,
 			row.footprintValue,
 			rankingHTMLCell(
 				formatBytes(row.footprintValue), row.footprintScore,
-				row.footprintRank,
+				row.footprintRank, ranking.footprintRatio,
 			),
 		)
 	}
@@ -106,7 +112,7 @@ func rankingHTMLTool(report model.Report, index int) string {
 	return htmlToolLabel(report, index, true)
 }
 
-func rankingHTMLCell(value string, score float64, rank int) string {
+func rankingHTMLCell(value string, score float64, rank int, ratioAvailable bool) string {
 	if math.IsInf(score, 1) || math.IsNaN(score) {
 		return "N/A"
 	}
@@ -114,9 +120,13 @@ func rankingHTMLCell(value string, score float64, rank int) string {
 	if rank == 1 {
 		class = "good"
 	}
+	delta := "Δ n/a"
+	if ratioAvailable {
+		delta = formatSignedPercent((score-1)*100) + " from best"
+	}
 	return fmt.Sprintf(
 		"<strong class=\"%s\">%s</strong>"+
-			"<span class=\"delta muted\">%s from best · #%d</span>",
-		class, html.EscapeString(value), formatSignedPercent((score-1)*100), rank,
+			"<span class=\"delta muted\">%s · #%d</span>",
+		class, html.EscapeString(value), delta, rank,
 	)
 }

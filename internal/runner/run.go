@@ -3,7 +3,7 @@ package runner
 import (
 	"context"
 	"os"
-	"os/exec"
+	"syscall"
 	"time"
 
 	"perftool/internal/model"
@@ -20,6 +20,7 @@ func runOnce(
 		return runTUIOnce(ctx, spec, interval, options)
 	}
 	cmd := spec.command(ctx)
+	configureProcessGroup(cmd)
 	if options.ShowOutput {
 		output := options.Output
 		if output == nil {
@@ -37,10 +38,10 @@ func runOnce(
 
 	waitErr := cmd.Wait()
 	elapsed := time.Since(started)
+	signalProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
 	close(stop)
 	peak := <-done
 	user, system, rusageRSS := platform.ResourceUsage(cmd.ProcessState)
-	peak.ResidentBytes = max(peak.ResidentBytes, rusageRSS)
 	peak.Processes = max(peak.Processes, 1)
 	peak.Threads = max(peak.Threads, 1)
 
@@ -48,22 +49,23 @@ func runOnce(
 		return model.Run{}, ctx.Err()
 	}
 	if waitErr != nil {
-		if _, ok := waitErr.(*exec.ExitError); !ok {
-			return model.Run{}, waitErr
-		}
+		return model.Run{}, waitErr
 	}
 	meanResident := sampledMeanResident(peak)
 	return model.Run{
 		ExitCode: cmd.ProcessState.ExitCode(), WallSeconds: elapsed.Seconds(),
 		CPUUserSeconds: user, CPUSystemSeconds: system,
-		AverageCPUPercent:   averageCPUPercent(user, system, elapsed),
-		PeakResidentBytes:   float64(peak.ResidentBytes),
-		MeanResidentBytes:   meanResident,
-		PeakVirtualBytes:    float64(peak.VirtualBytes),
-		PeakProcesses:       float64(peak.Processes),
-		PeakThreads:         float64(peak.Threads),
-		PeakFileDescriptors: float64(peak.FileDescriptors),
-		StopReason:          "exited",
+		AverageCPUPercent:     averageCPUPercent(user, system, elapsed),
+		PeakResidentBytes:     float64(peak.ResidentBytes),
+		WaitedMaxRSSBytes:     float64(rusageRSS),
+		MeanResidentBytes:     meanResident,
+		PeakVirtualBytes:      float64(peak.VirtualBytes),
+		PeakProcesses:         float64(peak.Processes),
+		PeakThreads:           float64(peak.Threads),
+		PeakFileDescriptors:   float64(peak.FileDescriptors),
+		StopReason:            "exited",
+		SampleCount:           int(peak.SampleCount),
+		SampleCoverageSeconds: peak.SampleCoverageSeconds,
 	}, nil
 }
 
@@ -76,9 +78,23 @@ func monitor(
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	var peak platform.Metrics
+	var previousRSS uint64
+	var previousAt time.Time
+	addCoverage := func(now time.Time) {
+		if previousAt.IsZero() {
+			return
+		}
+		seconds := now.Sub(previousAt).Seconds()
+		peak.ResidentByteSeconds += float64(previousRSS) * seconds
+		peak.SampleCoverageSeconds += seconds
+	}
 	sample := func() {
-		current := platform.SampleTree(pid)
-		updatePeaks(&peak, current)
+		if current, valid := platform.SampleTree(pid); valid {
+			now := time.Now()
+			addCoverage(now)
+			updatePeaks(&peak, current)
+			previousRSS, previousAt = current.ResidentBytes, now
+		}
 	}
 	if platform.SampleImmediately() {
 		sample()
@@ -88,6 +104,7 @@ func monitor(
 		case <-ticker.C:
 			sample()
 		case <-stop:
+			addCoverage(time.Now())
 			done <- peak
 			return
 		}
@@ -107,6 +124,9 @@ func updatePeaks(peak *platform.Metrics, current platform.Metrics) {
 }
 
 func sampledMeanResident(metrics platform.Metrics) float64 {
+	if metrics.SampleCoverageSeconds > 0 {
+		return metrics.ResidentByteSeconds / metrics.SampleCoverageSeconds
+	}
 	if metrics.SampleCount == 0 {
 		return 0
 	}

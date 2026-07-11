@@ -10,14 +10,12 @@ import (
 
 func writeTextRanking(writer io.Writer, report model.Report) {
 	ranking := calculateRanking(report)
-	fmt.Fprintln(writer, "Category winners\tTool\tValue")
-	baselineName := report.Benchmarks[baselineIndex(report)].Tool.Name
+	fmt.Fprintln(writer, "Category leaders (point estimates)\tTool\tValue")
 	for _, winner := range ranking.winners {
-		name := winner.tool
-		if name == baselineName {
-			name += " [BASELINE]"
-		}
-		fmt.Fprintf(writer, "%s\t%s\t%s\n", winner.category, name, winner.value)
+		fmt.Fprintf(
+			writer, "%s\t%s\t%s\n", winner.category,
+			winnerNames(report, winner, true), winner.value,
+		)
 	}
 	fmt.Fprintln(writer)
 	fmt.Fprintf(
@@ -26,14 +24,14 @@ func writeTextRanking(writer io.Writer, report model.Report) {
 	)
 	fmt.Fprintf(
 		writer,
-		"Overall ranking\tTool\tBalanced\t%s\tCPU cost\tRAM aggregate\tLinked size\n",
+		"Overall ranking (point estimates)\tTool\tBalanced\t%s\tCPU cost\tRAM aggregate\tLinked size\n",
 		ranking.primaryLabel,
 	)
 	for _, row := range ranking.rows {
 		ramValue := "N/A"
 		if ranking.ramAvailable {
 			ramValue = rankingCell(
-				formatBytes(row.ramValue), row.ramScore, row.ramRank,
+				formatBytes(row.ramValue), row.ramScore, row.ramRank, true,
 			)
 		}
 		fmt.Fprintf(
@@ -41,26 +39,31 @@ func writeTextRanking(writer io.Writer, report model.Report) {
 			row.overallRank, reportToolLabel(report, row.benchmark),
 			rankingCell(
 				formatScore(row.overallScore), row.overallScore/ranking.bestOverall,
-				row.overallRank,
+				row.overallRank, true,
 			),
 			rankingCell(
 				ranking.primaryUnit(row.primaryValue), row.primaryScore,
-				row.primaryRank,
+				row.primaryRank, ranking.primaryRatio,
 			),
-			rankingCell(cpuRankingValue(report, row), row.cpuScore, row.cpuRank),
+			rankingCell(
+				cpuRankingValue(report, row), row.cpuScore, row.cpuRank, ranking.cpuRatio,
+			),
 			ramValue,
 			rankingCell(
 				formatBytes(row.footprintValue), row.footprintScore,
-				row.footprintRank,
+				row.footprintRank, ranking.footprintRatio,
 			),
 		)
 	}
 	fmt.Fprintln(writer)
 }
 
-func rankingCell(value string, score float64, rank int) string {
+func rankingCell(value string, score float64, rank int, ratioAvailable bool) string {
 	if math.IsInf(score, 1) || math.IsNaN(score) {
 		return "N/A"
+	}
+	if !ratioAvailable {
+		return fmt.Sprintf("%s · Δ n/a (#%d)", value, rank)
 	}
 	return fmt.Sprintf(
 		"%s · %s (#%d)", value, formatSignedPercent((score-1)*100), rank,

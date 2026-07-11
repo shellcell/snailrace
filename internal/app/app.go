@@ -56,10 +56,15 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 		TerminalWidth:   width, TerminalHeight: height,
 		TerminalInherited: inheritedSize,
 		Baseline:          options.baseline,
+		BaselineAutomatic: options.baseline == 0,
+		OrderSeed:         measuredAt.UnixNano(),
+		OrderMethod:       "randomized counterbalanced cyclic blocks",
+		OutputMode:        outputMode(options),
 	}
 	benchmarks, err := runner.Benchmark(
 		ctx, options.specs, runner.Config{
 			Runs: config.Runs, Warmups: config.Warmups, Interval: config.Interval,
+			OrderSeed: config.OrderSeed,
 		}, runner.Options{
 			ShowOutput: options.showOutput, TUI: options.tui,
 			Output:   stderr,
@@ -84,6 +89,7 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 		Benchmarks: benchmarks,
 		Notes: platformNotes(
 			options.tui, options.duration, len(options.specs) > 1,
+			config.BaselineAutomatic, config.OrderSeed, config.OutputMode,
 		),
 	}
 	if err := writeResult(
@@ -92,6 +98,19 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	return checkExitCodes(benchmarks)
+}
+
+func outputMode(options options) string {
+	if options.tui {
+		if len(options.specs) == 1 {
+			return "interactive PTY"
+		}
+		return "drained PTY"
+	}
+	if options.showOutput {
+		return "forwarded to stderr"
+	}
+	return "null device"
 }
 
 func prepare(ctx context.Context, command string, output io.Writer) error {

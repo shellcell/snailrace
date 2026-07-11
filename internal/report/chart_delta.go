@@ -14,6 +14,7 @@ type forestRow struct {
 	point, low, high float64
 	status, class    string
 	identity         string
+	interval         bool
 	baseline         bool
 }
 
@@ -45,10 +46,13 @@ func deltaForestChart(report model.Report, group chartGroup) svgChart {
 					continue
 				}
 				value := metric.stats(candidate).Mean
+				delta := compareMetric(
+					baseline, candidate, row, report.Config.IntervalMS/1000,
+				)
 				rows = append(rows, forestRow{
 					label:  metric.name + " · " + candidate.Tool.Name,
-					status: metric.format(value) + " · Δ n/a (baseline 0)",
-					class:  "neutral", identity: toolColor(report, index),
+					status: metric.format(value) + " · Δ% n/a · " + delta.status,
+					class:  delta.class, identity: toolColor(report, index),
 					baseline: true,
 				})
 			}
@@ -69,7 +73,7 @@ func deltaForestChart(report model.Report, group chartGroup) svgChart {
 				label: metric.name + " · " + candidate.Tool.Name,
 				point: delta.percent, low: low, high: high,
 				status: delta.status, class: delta.class,
-				identity: toolColor(report, index),
+				identity: toolColor(report, index), interval: delta.difference.CI95Valid,
 			})
 		}
 	}
@@ -118,6 +122,18 @@ func renderForest(
 					`<text x="570" y="%d" fill="%s" font-size="11">%s</text>`,
 				y, row.identity, html.EscapeString(clip(row.label, 31)), position(0), y-10,
 				color, y, color, html.EscapeString(row.status),
+			)
+			continue
+		}
+		if !row.interval {
+			fmt.Fprintf(
+				&body,
+				`<text x="16" y="%d" class="label" style="fill:%s">%s</text>`+
+					`<circle cx="%.1f" cy="%d" r="5" fill="%s"/>`+
+					`<text x="570" y="%d" fill="%s" font-size="11">%s %s</text>`,
+				y, row.identity, html.EscapeString(clip(row.label, 31)),
+				position(row.point), y-4, color, y, color,
+				formatSignedPercent(row.point), row.status,
 			)
 			continue
 		}

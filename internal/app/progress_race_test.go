@@ -26,8 +26,12 @@ func TestProgressRaceAdvancesBetterExpectedTool(t *testing.T) {
 		t.Fatalf("race lines = %d, want 2", len(lines))
 	}
 	for _, line := range lines {
-		if !strings.HasSuffix(progressColorSequence.ReplaceAllString(line, ""), "🐌") {
-			t.Fatalf("track does not end in snail: %q", line)
+		clean := progressColorSequence.ReplaceAllString(line, "")
+		if !strings.HasSuffix(clean, "🏁") {
+			t.Fatalf("unfinished track does not end in a finish flag: %q", line)
+		}
+		if !strings.Contains(clean, "🐌") {
+			t.Fatalf("track has no snail: %q", line)
 		}
 	}
 	if progressTrailLength(lines[0]) <= progressTrailLength(lines[1]) {
@@ -39,6 +43,26 @@ func TestProgressRaceAdvancesBetterExpectedTool(t *testing.T) {
 	colorPrefix := strings.TrimSuffix(progressToolColor(0, ""), "\x1b[0m")
 	if !strings.Contains(lines[0], colorPrefix+"better") {
 		t.Fatal("tool name does not use its report color")
+	}
+}
+
+func TestProgressWinnerErasesFinishFlag(t *testing.T) {
+	winner := progressEstimate("winner", 1)
+	winner.Completed, winner.Total = 4, 4
+	loser := progressEstimate("loser", 4)
+	loser.Completed, loser.Total = 4, 4
+	event := runner.ProgressEvent{
+		Completed: 8, Total: 8,
+		Estimates: []runner.ProgressEstimate{winner, loser},
+	}
+	lines := progressRaceLines(event, 80)
+	win := progressColorSequence.ReplaceAllString(lines[0], "")
+	lose := progressColorSequence.ReplaceAllString(lines[1], "")
+	if strings.Contains(win, "🏁") || !strings.HasSuffix(win, "🐌") {
+		t.Fatalf("winner should reach the finish and erase its flag: %q", win)
+	}
+	if !strings.HasSuffix(lose, "🏁") {
+		t.Fatalf("loser should keep its finish flag standing: %q", lose)
 	}
 }
 

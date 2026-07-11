@@ -10,6 +10,7 @@ import (
 type Config struct {
 	Runs, Warmups int
 	Interval      time.Duration
+	OrderSeed     int64
 }
 
 type Options struct {

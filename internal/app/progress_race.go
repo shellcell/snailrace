@@ -41,15 +41,26 @@ func progressRaceLines(event runner.ProgressEvent, terminalWidth int) []string {
 		fraction := progressTrackFraction(tool.Completed, tool.Total, quality)
 		distance := int(float64(trackWidth) * fraction)
 		name := fmt.Sprintf("%-16s", progressToolName(tool.ToolName, 16))
-		trail := strings.Repeat(trails[index], distance) + "🐌"
+		track := progressTrack(trails[index], distance, trackWidth)
 		line := fmt.Sprintf(
 			"  %s %3d/%-3d %11s %s",
 			progressToolColor(index, name), tool.Completed, tool.Total,
-			scoreLabel, progressToolColor(index, trail),
+			scoreLabel, progressToolColor(index, track),
 		)
 		lines = append(lines, line)
 	}
 	return lines
+}
+
+// progressTrack draws a snail on its lane with a finish flag planted at the
+// end. Every lane shows its flag until the snail reaches it: only a snail that
+// runs the full track (the winner, at fraction 1) knocks its flag down.
+func progressTrack(trail string, distance, width int) string {
+	if distance >= width {
+		return strings.Repeat(trail, width) + "🐌"
+	}
+	gap := strings.Repeat(" ", width-distance-1)
+	return strings.Repeat(trail, distance) + "🐌" + gap + "🏁"
 }
 
 func progressTrackFraction(completed, total int, quality float64) float64 {
