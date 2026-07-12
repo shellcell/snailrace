@@ -87,6 +87,10 @@ Useful options:
 
 Command output is discarded by default so it cannot corrupt stdout reports.
 Raw observations are retained by JSON reports.
+Interrupting with Ctrl+C still produces a report from the completed measurement
+rounds; the unfinished final round is discarded so every tool keeps an equal
+number of runs, and an interruption note records how many rounds were kept. If no
+full round finished, no report is produced.
 Before measurement starts, a legend maps each tool label to its full command,
 colored per tool when stderr is a terminal. Human-readable text reports are
 always written to stdout and use ANSI colors when stdout is a terminal. By

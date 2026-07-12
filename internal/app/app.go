@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -93,8 +94,30 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 			),
 		},
 	)
-	if err != nil {
+	interrupted := errors.Is(err, runner.ErrInterrupted)
+	if err != nil && !interrupted {
 		return err
+	}
+	notes := platformNotes(
+		options.tui, options.duration, len(options.specs) > 1,
+		config.BaselineAutomatic, config.OrderSeed, config.OutputMode,
+	)
+	if interrupted {
+		completed := 0
+		if len(benchmarks) > 0 {
+			completed = len(benchmarks[0].Runs)
+		}
+		message := fmt.Sprintf(
+			"Measurement interrupted; reporting %d completed round(s) of %d "+
+				"and discarding the unfinished final round.",
+			completed, config.Runs,
+		)
+		fmt.Fprintln(stderr, message)
+		notes = append([]string{message}, notes...)
+		config.Runs = completed
+		if completed < len(config.MeasurementOrder) {
+			config.MeasurementOrder = config.MeasurementOrder[:completed]
+		}
 	}
 	if config.Baseline == 0 {
 		config.Baseline = analysis.AutomaticBaseline(config, benchmarks)
@@ -103,10 +126,7 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 	result := model.Report{
 		MeasuredAt: measuredAt, Config: config, Host: host,
 		Benchmarks: benchmarks, Verbose: options.verbose,
-		Notes: platformNotes(
-			options.tui, options.duration, len(options.specs) > 1,
-			config.BaselineAutomatic, config.OrderSeed, config.OutputMode,
-		),
+		Notes: notes,
 	}
 	if err := writeResult(
 		stdout, stderr, options.output, options.formats, result,

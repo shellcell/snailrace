@@ -2,10 +2,16 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"perftool/internal/model"
 )
+
+// ErrInterrupted reports that measurement was cancelled (for example by Ctrl+C)
+// after at least one full round completed. The returned benchmarks hold only the
+// completed rounds; the partial final round is discarded.
+var ErrInterrupted = errors.New("measurement interrupted")
 
 func Benchmark(
 	ctx context.Context,
@@ -32,6 +38,7 @@ func Benchmark(
 			len(specs), config.Warmups, config.OrderSeed^0x5deece66d,
 		)
 	}
+	interrupted := false
 	for warmup, order := range warmupOrder {
 		for _, index := range order {
 			spec := specs[index]
@@ -41,11 +48,18 @@ func Benchmark(
 			warmupOptions := options
 			warmupOptions.Interactive = false
 			if _, err := runOnce(ctx, spec, config.Interval, warmupOptions); err != nil {
+				if ctx.Err() != nil {
+					interrupted = true
+					break
+				}
 				return nil, fmt.Errorf("warmup %q: %w", spec.Name, err)
 			}
 			progress.update(
 				index, spec.Name, warmup+1, config.Warmups, true, true, nil,
 			)
+		}
+		if interrupted {
+			break
 		}
 	}
 
@@ -53,7 +67,11 @@ func Benchmark(
 	if len(measurementOrder) != config.Runs {
 		measurementOrder = BalancedSchedule(len(specs), config.Runs, config.OrderSeed)
 	}
+	completedRounds := 0
 	for runIndex, order := range measurementOrder {
+		if interrupted {
+			break
+		}
 		for _, index := range order {
 			progress.update(
 				index, specs[index].Name, runIndex+1, config.Runs,
@@ -61,6 +79,10 @@ func Benchmark(
 			)
 			run, err := runOnce(ctx, specs[index], config.Interval, options)
 			if err != nil {
+				if ctx.Err() != nil {
+					interrupted = true
+					break
+				}
 				return nil, fmt.Errorf("run %q: %w", specs[index].Name, err)
 			}
 			run.Index = runIndex + 1
@@ -70,12 +92,27 @@ func Benchmark(
 				false, true, benchmarks[index].Runs,
 			)
 		}
+		if !interrupted {
+			completedRounds = runIndex + 1
+		}
+	}
+	// Discard a partial final round so every tool has the same number of runs.
+	for index := range benchmarks {
+		if len(benchmarks[index].Runs) > completedRounds {
+			benchmarks[index].Runs = benchmarks[index].Runs[:completedRounds]
+		}
+	}
+	if interrupted && completedRounds == 0 {
+		return nil, ctx.Err()
 	}
 	for index := range benchmarks {
 		if err := inspector.addHash(&benchmarks[index].Tool); err != nil {
 			return nil, fmt.Errorf("hash %q: %w", benchmarks[index].Tool.Name, err)
 		}
 		benchmarks[index].Summary = model.Summarize(benchmarks[index].Runs)
+	}
+	if interrupted {
+		return benchmarks, ErrInterrupted
 	}
 	return benchmarks, nil
 }
