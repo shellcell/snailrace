@@ -33,11 +33,17 @@ func rankingCharts(report model.Report) []svgChart {
 			func(row rankingRow) int { return row.cpuRank },
 		})
 	}
-	if ranking.ramAvailable {
+	if ranking.ramPresent {
+		ramRank := func(row rankingRow) int { return row.ramRank }
+		if !ranking.ramAvailable {
+			// Sampling-limited RAM has no reliable score; rank descriptively by value.
+			order := rankByValue(ranking.rows, func(row rankingRow) float64 { return row.ramValue })
+			ramRank = func(row rankingRow) int { return order[row.benchmark] }
+		}
 		metrics = append(metrics, rankingChartMetric{
 			"RAM AGGREGATE", formatBytes,
 			func(row rankingRow) float64 { return row.ramValue },
-			func(row rankingRow) int { return row.ramRank },
+			ramRank,
 		})
 	}
 	metrics = append(metrics, rankingChartMetric{
@@ -50,6 +56,20 @@ func rankingCharts(report model.Report) []svgChart {
 		charts = append(charts, rankingBarChart(report, ranking, metric))
 	}
 	return charts
+}
+
+func rankByValue(rows []rankingRow, value func(rankingRow) float64) map[int]int {
+	result := make(map[int]int, len(rows))
+	for _, row := range rows {
+		rank := 1
+		for _, other := range rows {
+			if value(other) < value(row) {
+				rank++
+			}
+		}
+		result[row.benchmark] = rank
+	}
+	return result
 }
 
 func rankingBarChart(
@@ -68,12 +88,19 @@ func rankingBarChart(
 	height := 62 + len(ranking.rows)*rowHeight
 	var body strings.Builder
 	body.WriteString(svgChartStyle)
+	subtitle := "descriptive point estimates · outline = category leader"
+	if metric.name == "RAM AGGREGATE" && ranking.ramPresent && !ranking.ramAvailable {
+		subtitle = "sampling-limited · descriptive only · excluded from balanced index"
+		if ranking.samplingInterval != "" {
+			subtitle += " · lower -interval (now " + ranking.samplingInterval + ")"
+		}
+	}
 	fmt.Fprintf(
 		&body,
 		`<rect width="100%%" height="100%%" rx="8" fill="#3b4252"/>`+
 			`<text x="16" y="23" class="title">RANKING · %s</text>`+
-			`<text x="16" y="41" class="subtitle">descriptive point estimates · outline = category leader</text>`,
-		html.EscapeString(metric.name),
+			`<text x="16" y="41" class="subtitle">%s</text>`,
+		html.EscapeString(metric.name), html.EscapeString(subtitle),
 	)
 	for index, row := range ranking.rows {
 		y := 62 + index*rowHeight
@@ -121,9 +148,18 @@ func rankingChartDescription(metric string, ranking rankingData) string {
 			"fixed-duration TUI value = mean average CPU percent. Lower bars are better; " +
 			"this ranking does not include uncertainty intervals."
 	case "RAM AGGREGATE":
+		caveat := ""
+		if ranking.ramPresent && !ranking.ramAvailable {
+			caveat = " These values are sampling-limited (short runs or too few valid " +
+				"samples), so they are shown for reference but excluded from the balanced index."
+			if ranking.samplingInterval != "" {
+				caveat += " The current sampling interval is " + ranking.samplingInterval +
+					"; re-run with a smaller -interval for reliable RAM."
+			}
+		}
 		return "Ranks tools by RAM aggregate. Math: value = sqrt(mean of per-run mean RSS " +
 			"* mean of per-run peak RSS), using sampled tree RSS. Lower bars are better; " +
-			"this ranking does not include uncertainty intervals."
+			"this ranking does not include uncertainty intervals." + caveat
 	case "LINKED SIZE":
 		return "Ranks tools by linked disk footprint. Math: value = executable bytes + " +
 			"linked-library bytes discovered before measurement. Lower bars are better; " +

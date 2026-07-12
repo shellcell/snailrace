@@ -10,6 +10,7 @@ import (
 type Ranking struct {
 	Rows           []RankingRow
 	RAMAvailable   bool
+	RAMPresent     bool
 	BestOverall    float64
 	FixedTUI       bool
 	PrimaryRatio   bool
@@ -64,7 +65,8 @@ func Calculate(config model.Config, benchmarks []model.Benchmark) Ranking {
 	if !hasPositive(meanRAM) || !hasPositive(peakRAM) {
 		result.RAMAvailable = false
 	}
-	result.RAMAvailable = result.RAMAvailable && allPositive(meanRAM) && allPositive(peakRAM)
+	result.RAMPresent = allPositive(meanRAM) && allPositive(peakRAM)
+	result.RAMAvailable = result.RAMAvailable && result.RAMPresent
 	result.PrimaryRatio = allPositive(primary)
 	result.CPURatio = allPositive(cpu)
 	result.FootprintRatio = allPositive(footprint)
@@ -92,7 +94,7 @@ func Calculate(config model.Config, benchmarks []model.Benchmark) Ranking {
 			scores = append(scores, footprintScore[index])
 		}
 		ramValue := 0.0
-		if result.RAMAvailable {
+		if result.RAMPresent {
 			ramValue = geometricMean([]float64{meanRAM[index], peakRAM[index]})
 		}
 		result.Rows[index] = RankingRow{

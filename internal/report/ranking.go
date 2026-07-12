@@ -9,11 +9,15 @@ func calculateRanking(report model.Report) rankingData {
 	numeric := analysis.Calculate(report.Config, report.Benchmarks)
 	result := rankingData{
 		rows:         make([]rankingRow, len(numeric.Rows)),
-		ramAvailable: numeric.RAMAvailable, bestOverall: numeric.BestOverall,
+		ramAvailable: numeric.RAMAvailable, ramPresent: numeric.RAMPresent,
+		bestOverall:  numeric.BestOverall,
 		primaryRatio: numeric.PrimaryRatio, cpuRatio: numeric.CPURatio,
 		footprintRatio: numeric.FootprintRatio,
 		indexPrimary:   numeric.IndexPrimary, indexCPU: numeric.IndexCPU,
 		indexRAM: numeric.IndexRAM, indexFootprint: numeric.IndexFootprint,
+	}
+	if result.ramPresent && !result.ramAvailable {
+		result.samplingInterval = currentIntervalLabel(report.Config)
 	}
 	for index, row := range numeric.Rows {
 		result.rows[index] = rankingRow{

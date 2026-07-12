@@ -19,7 +19,7 @@ import (
 	"perftool/internal/runner"
 )
 
-const Version = "0.1.0"
+const Version = "0.0.1"
 
 func Run(arguments []string, stdout, stderr io.Writer) error {
 	options, err := parseOptions(arguments, stderr)
@@ -118,6 +118,10 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 		if completed < len(config.MeasurementOrder) {
 			config.MeasurementOrder = config.MeasurementOrder[:completed]
 		}
+	}
+	if hint := report.SamplingLimitNote(config, benchmarks); hint != "" {
+		fmt.Fprintln(stderr, hint)
+		notes = append(notes, hint)
 	}
 	if config.Baseline == 0 {
 		config.Baseline = analysis.AutomaticBaseline(config, benchmarks)

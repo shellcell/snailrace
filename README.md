@@ -4,6 +4,8 @@
 uses OS-reported CPU accounting for the waited process, and samples process-tree
 memory, processes, threads, and file descriptors where the OS exposes them.
 
+![snailrace usage animation](/assets/snailrace.svg)
+
 ## Build
 
 Go 1.22 or newer is required. The default build strips paths, symbols, and

@@ -89,6 +89,57 @@ func TestCompactSingleToolListsKeyMetrics(t *testing.T) {
 	}
 }
 
+func samplingLimitedRAMReport() model.Report {
+	// Positive RAM values but IntervalMS>0 with runs lacking >=2 samples make RAM
+	// present yet sampling-limited: shown with a remark, excluded from the index.
+	return model.Report{
+		Config: model.Config{Mode: "command", Baseline: 1, IntervalMS: 10},
+		Benchmarks: []model.Benchmark{
+			rankingBenchmark("first", 1, 1, 100, 200, 1000),
+			rankingBenchmark("second", 2, 2, 120, 260, 1200),
+		},
+	}
+}
+
+func TestSamplingLimitedRAMIsShownButExcludedFromIndex(t *testing.T) {
+	report := samplingLimitedRAMReport()
+	ranking := calculateRanking(report)
+	if ranking.ramAvailable || !ranking.ramPresent {
+		t.Fatalf("want RAM present but sampling-limited, got present=%v available=%v",
+			ranking.ramPresent, ranking.ramAvailable)
+	}
+	if strings.Contains(balancedIndexCategories(ranking), "RAM") {
+		t.Fatal("sampling-limited RAM must stay out of the balanced index")
+	}
+	// Compact stdout shows the RAM bars with a remark.
+	var compact bytes.Buffer
+	if err := writeText(&compact, report); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(compact.String(), "RAM") ||
+		!strings.Contains(compact.String(), "sampling-limited") {
+		t.Fatalf("compact report should show RAM with a remark:\n%s", compact.String())
+	}
+	// HTML ranking table and the RAM chart show it with a remark, not N/A.
+	var htmlRanking bytes.Buffer
+	writeHTMLRanking(&htmlRanking, report)
+	if !strings.Contains(htmlRanking.String(), "sampling-limited") {
+		t.Fatal("HTML ranking should mark RAM sampling-limited instead of N/A")
+	}
+	foundRAMChart := false
+	for _, chart := range rankingCharts(report) {
+		if chart.title == "RAM AGGREGATE" {
+			foundRAMChart = true
+			if !strings.Contains(chart.description, "sampling-limited") {
+				t.Fatal("RAM chart description should note the sampling limitation")
+			}
+		}
+	}
+	if !foundRAMChart {
+		t.Fatal("RAM aggregate chart should still render when sampling-limited")
+	}
+}
+
 func TestColumnGapsFindsRunsOfAtLeastTwoSpaces(t *testing.T) {
 	gaps := columnGaps("a  bb   c d")
 	want := [][2]int{{1, 3}, {5, 8}}
