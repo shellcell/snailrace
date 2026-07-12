@@ -21,9 +21,64 @@ func TestParseDirectCommand(t *testing.T) {
 	}
 }
 
-func TestRejectsNameForComparison(t *testing.T) {
+func TestRejectsLabelCountMismatch(t *testing.T) {
 	_, err := parseOptions(
-		[]string{"-name", "x", "-c", "true", "-c", "false"},
+		[]string{"-label", "x", "-c", "true", "-c", "false"},
+		io.Discard,
+	)
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+}
+
+func TestSingleLabelNamesPositionalCommand(t *testing.T) {
+	options, err := parseOptions(
+		[]string{"-label", "build", "--", "sleep", "0.1"},
+		io.Discard,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(options.specs) != 1 || options.specs[0].Name != "build" {
+		t.Fatalf("unexpected specs: %+v", options.specs)
+	}
+}
+
+func TestDefaultIndexOmitsDisk(t *testing.T) {
+	options, err := parseOptions([]string{"--", "sleep", "0.1"}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"time", "cpu", "ram"}
+	if len(options.index) != len(want) {
+		t.Fatalf("index = %v, want %v", options.index, want)
+	}
+	for i, dimension := range want {
+		if options.index[i] != dimension {
+			t.Fatalf("index = %v, want %v", options.index, want)
+		}
+	}
+}
+
+func TestParseIndexOverride(t *testing.T) {
+	options, err := parseOptions(
+		[]string{"-index", "cpu,ram,disk", "--", "sleep", "0.1"},
+		io.Discard,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"cpu", "ram", "disk"}
+	for i, dimension := range want {
+		if i >= len(options.index) || options.index[i] != dimension {
+			t.Fatalf("index = %v, want %v", options.index, want)
+		}
+	}
+}
+
+func TestRejectsUnknownIndexDimension(t *testing.T) {
+	_, err := parseOptions(
+		[]string{"-index", "time,bogus", "--", "sleep", "0.1"},
 		io.Discard,
 	)
 	if err == nil {

@@ -55,8 +55,7 @@ func measurementTrendChart(report model.Report, benchmarkIndex int, group chartG
 		&body,
 		`<rect width="100%%" height="100%%" rx="8" fill="#3b4252"/>`+
 			`<text x="16" y="23" class="title">MEASUREMENT TRENDS · %s</text>`+
-			`<text x="16" y="41" class="subtitle" style="fill:%s">%s</text>`+
-			`<text x="16" y="57" class="subtitle">shared scale within each lane</text>`,
+			`<text x="16" y="41" class="subtitle" style="fill:%s">%s</text>`,
 		html.EscapeString(group.name), toolColorHex, html.EscapeString(clip(toolLabel, 42)),
 	)
 	for laneIndex, lane := range lanes {

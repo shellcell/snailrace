@@ -16,6 +16,7 @@ type Config struct {
 	BaselineAutomatic bool          `json:"baseline_automatic"`
 	OrderSeed         int64         `json:"order_seed"`
 	OrderMethod       string        `json:"order_method"`
+	IndexDimensions   []string      `json:"index_dimensions"`
 	MeasurementOrder  [][]int       `json:"measurement_order"`
 	WarmupOrder       [][]int       `json:"warmup_order,omitempty"`
 	OutputMode        string        `json:"output_mode"`

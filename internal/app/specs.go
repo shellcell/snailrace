@@ -8,10 +8,11 @@ import (
 	"perftool/internal/runner"
 )
 
-func makeSpecs(commands, arguments []string, name string, labels []string) []runner.Spec {
+func makeSpecs(commands, arguments []string, labels []string) []runner.Spec {
 	if len(commands) == 0 {
-		if name == "" {
-			name = filepath.Base(arguments[0])
+		name := filepath.Base(arguments[0])
+		if len(labels) > 0 {
+			name = labels[0]
 		}
 		return []runner.Spec{{Name: name, Args: arguments}}
 	}
@@ -32,9 +33,6 @@ func makeSpecs(commands, arguments []string, name string, labels []string) []run
 			label += " #" + fmt.Sprint(seen[label])
 		}
 		result = append(result, runner.Spec{Name: label, Shell: command})
-	}
-	if name != "" && len(result) == 1 {
-		result[0].Name = name
 	}
 	return result
 }

@@ -136,16 +136,16 @@ func rankingChartDescription(metric string, ranking rankingData) string {
 
 func balancedIndexCategories(ranking rankingData) string {
 	var categories []string
-	if ranking.primaryRatio && ranking.primaryLabel != "CPU" {
+	if ranking.indexPrimary {
 		categories = append(categories, primaryCategoryName(ranking.primaryLabel))
 	}
-	if ranking.cpuRatio {
+	if ranking.indexCPU {
 		categories = append(categories, "CPU cost")
 	}
-	if ranking.ramAvailable {
+	if ranking.indexRAM {
 		categories = append(categories, "RAM aggregate")
 	}
-	if ranking.footprintRatio {
+	if ranking.indexFootprint {
 		categories = append(categories, "linked size")
 	}
 	if len(categories) == 0 {

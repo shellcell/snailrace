@@ -33,5 +33,9 @@ type rankingData struct {
 	primaryRatio   bool
 	cpuRatio       bool
 	footprintRatio bool
+	indexPrimary   bool
+	indexCPU       bool
+	indexRAM       bool
+	indexFootprint bool
 	bestOverall    float64
 }

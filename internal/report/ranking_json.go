@@ -52,7 +52,8 @@ func writeJSON(writer io.Writer, report model.Report) error {
 func makeJSONRanking(report model.Report) jsonRanking {
 	ranking := calculateRanking(report)
 	result := jsonRanking{
-		Method:        "equal-weight geometric mean of available normalized category costs",
+		Method: "equal-weight geometric mean of normalized category costs; included: " +
+			balancedIndexCategories(ranking),
 		PrimaryMetric: ranking.primaryLabel,
 	}
 	for _, winner := range ranking.winners {

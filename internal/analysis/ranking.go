@@ -15,6 +15,10 @@ type Ranking struct {
 	PrimaryRatio   bool
 	CPURatio       bool
 	FootprintRatio bool
+	IndexPrimary   bool
+	IndexCPU       bool
+	IndexRAM       bool
+	IndexFootprint bool
 }
 
 type RankingRow struct {
@@ -67,28 +71,25 @@ func Calculate(config model.Config, benchmarks []model.Benchmark) Ranking {
 	primaryScore, cpuScore := normalized(primary), normalized(cpu)
 	ramScore := normalizedPair(meanRAM, peakRAM, result.RAMAvailable)
 	footprintScore := normalized(footprint)
+	included := indexSet(config.IndexDimensions)
+	result.IndexPrimary = included["time"] && !result.FixedTUI && result.PrimaryRatio
+	result.IndexCPU = (included["cpu"] || (result.FixedTUI && included["time"])) &&
+		result.CPURatio
+	result.IndexRAM = included["ram"] && result.RAMAvailable
+	result.IndexFootprint = included["disk"] && result.FootprintRatio
 	for index := range result.Rows {
 		var scores []float64
-		if result.PrimaryRatio {
+		if result.IndexPrimary {
 			scores = append(scores, primaryScore[index])
 		}
-		if result.CPURatio {
+		if result.IndexCPU {
 			scores = append(scores, cpuScore[index])
 		}
-		if result.FootprintRatio {
-			scores = append(scores, footprintScore[index])
-		}
-		if result.FixedTUI {
-			scores = nil
-			if result.CPURatio {
-				scores = append(scores, cpuScore[index])
-			}
-			if result.FootprintRatio {
-				scores = append(scores, footprintScore[index])
-			}
-		}
-		if result.RAMAvailable {
+		if result.IndexRAM {
 			scores = append(scores, ramScore[index])
+		}
+		if result.IndexFootprint {
+			scores = append(scores, footprintScore[index])
 		}
 		ramValue := 0.0
 		if result.RAMAvailable {
@@ -116,6 +117,33 @@ func AutomaticBaseline(config model.Config, benchmarks []model.Benchmark) int {
 		return 1
 	}
 	return ranking.Rows[0].Benchmark + 1
+}
+
+// IndexDimensions are the cost categories that may compose the balanced index.
+var IndexDimensions = []string{"time", "cpu", "ram", "disk"}
+
+// DefaultIndexDimensions is the balanced index used when none is configured.
+var DefaultIndexDimensions = []string{"time", "cpu", "ram"}
+
+// ValidIndexDimension reports whether token names a known index dimension.
+func ValidIndexDimension(token string) bool {
+	for _, dimension := range IndexDimensions {
+		if token == dimension {
+			return true
+		}
+	}
+	return false
+}
+
+func indexSet(dimensions []string) map[string]bool {
+	if len(dimensions) == 0 {
+		dimensions = DefaultIndexDimensions
+	}
+	set := make(map[string]bool, len(dimensions))
+	for _, dimension := range dimensions {
+		set[dimension] = true
+	}
+	return set
 }
 
 func BalancedIndexes(config model.Config, benchmarks []model.Benchmark) []float64 {

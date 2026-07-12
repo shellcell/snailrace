@@ -172,21 +172,35 @@ func TestSingleToolReportOmitsRankingCharts(t *testing.T) {
 }
 
 func TestBalancedIndexDescriptionListsIncludedCategories(t *testing.T) {
+	benchmarks := []model.Benchmark{
+		benchmarkWithResourceCosts("first", 1, 0.5, 100, 200, 1000),
+		benchmarkWithResourceCosts("second", 2, 0.7, 120, 260, 1200),
+	}
+	// Default index omits disk footprint, so linked size is not listed.
 	report := model.Report{
-		Config: model.Config{Mode: "command", Baseline: 1},
-		Benchmarks: []model.Benchmark{
-			benchmarkWithResourceCosts("first", 1, 0.5, 100, 200, 1000),
-			benchmarkWithResourceCosts("second", 2, 0.7, 120, 260, 1200),
-		},
+		Config:     model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: benchmarks,
 	}
 	description := rankingCharts(report)[0].description
 	for _, expected := range []string{
-		"Included here: wall time, CPU cost, RAM aggregate, linked size",
+		"Included here: wall time, CPU cost, RAM aggregate.",
 		"score = value / best value",
 	} {
 		if !strings.Contains(description, expected) {
 			t.Fatalf("balanced-index description missing %q: %s", expected, description)
 		}
+	}
+	// Selecting disk adds linked size back to the composite description.
+	withDisk := model.Report{
+		Config: model.Config{
+			Mode: "command", Baseline: 1,
+			IndexDimensions: []string{"time", "cpu", "ram", "disk"},
+		},
+		Benchmarks: benchmarks,
+	}
+	description = rankingCharts(withDisk)[0].description
+	if !strings.Contains(description, "wall time, CPU cost, RAM aggregate, linked size") {
+		t.Fatalf("disk index missing linked size: %s", description)
 	}
 }
 

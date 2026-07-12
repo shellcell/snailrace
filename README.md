@@ -68,19 +68,21 @@ Useful options:
 
 | Option | Purpose |
 |---|---|
+| `-c`, `-command` | Shell command; repeat for comparison mode |
+| `-label` | Display label; repeat once per command, or name a single command |
+| `-prepare` | One-time setup command before warmups |
 | `-n`, `-runs` | Number of measured runs; default 10 |
 | `-warmups` | Unmeasured warmup runs; default 1 |
 | `-interval` | Resource sampling interval; Linux 10 ms, macOS 50 ms |
-| `-c`, `-command` | Shell command; repeat for comparison mode |
-| `-label` | Short display label; repeat in command order |
-| `-prepare` | One-time setup command before warmups |
-| `-format` | Saved format; repeat or comma-separate values; default `html` |
-| `-output` | Save selected formats in this directory |
-| `-show-output` | Forward measured command output to stderr |
+| `-index` | Balanced index dimensions; comma-separate `time`, `cpu`, `ram`, `disk`; default `time,cpu,ram` |
 | `-baseline` | 1-based override; default `0` selects the balanced winner |
+| `-f`, `-format` | Saved format; repeat or comma-separate values; default `html` |
+| `-o`, `-output` | Save selected formats in this directory |
+| `-show-output` | Forward measured command output to stderr |
 | `tui` | Run commands inside a pseudo-terminal |
-| `-duration` | Fixed TUI duration; required for comparisons |
+| `-d`, `-duration` | Fixed TUI duration; required for comparisons |
 | `-width`, `-height` | Optional reproducible TUI geometry |
+| `-v`, `-version` | Print version and exit |
 
 Command output is discarded by default so it cannot corrupt stdout reports.
 Raw observations are retained by JSON reports.
@@ -129,10 +131,13 @@ an automatically selected baseline are exploratory post-selection inference.
 Statistical direction does not imply that an effect is practically important.
 
 The automatic baseline is the lowest balanced index. That index is an
-equal-weight geometric mean of normalized elapsed time, CPU cost, RAM cost, and
-linked disk footprint; unavailable or sampling-limited categories are omitted.
-Categories containing nonpositive values are also omitted because cost ratios
-to a zero best value are undefined.
+equal-weight geometric mean of normalized cost categories. By default it
+includes elapsed time, CPU cost, and RAM cost; linked disk footprint is still
+measured and reported but excluded from the composite because static install
+size is a different concern than runtime performance. `-index` selects the
+included categories from `time`, `cpu`, `ram`, and `disk`. Unavailable or
+sampling-limited categories are omitted, as are categories containing
+nonpositive values because cost ratios to a zero best value are undefined.
 Fixed-duration TUI ranking replaces elapsed/total CPU with one average-CPU
 category because the configured active duration is shared.
 Reports also name descriptive time, CPU, RAM, and linked-size leaders. Ranking

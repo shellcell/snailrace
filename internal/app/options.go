@@ -1,7 +1,6 @@
 package app
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -29,6 +28,7 @@ type options struct {
 	output        string
 	formats       []string
 	prepare       string
+	index         []string
 	showOutput    bool
 	version       bool
 	tui           bool
@@ -40,7 +40,7 @@ func parseOptions(arguments []string, stderr io.Writer) (options, error) {
 	var result options
 	var commands, labels stringList
 	formats := newFormatValues()
-	var name string
+	index := newIndexValues()
 	var width, height uint
 	if len(arguments) > 0 && arguments[0] == "tui" {
 		result.tui = true
@@ -52,40 +52,47 @@ func parseOptions(arguments []string, stderr io.Writer) (options, error) {
 	}
 	flags := flag.NewFlagSet("snailrace", flag.ContinueOnError)
 	flags.SetOutput(stderr)
+	// Input.
+	flags.Var(&commands, "command", "shell command; repeat to compare")
+	flags.Var(&commands, "c", "shell command; repeat to compare (shorthand)")
+	flags.Var(&labels, "label", "display label; repeat once per command, in order")
+	flags.StringVar(&result.prepare, "prepare", "", "one-time setup command")
+	// Measurement.
 	flags.IntVar(&result.runs, "runs", defaultRuns, "number of measured runs")
 	flags.IntVar(&result.runs, "n", defaultRuns, "number of measured runs (shorthand)")
 	flags.IntVar(
 		&result.warmups, "warmups", defaultWarmups, "warmup runs per command",
 	)
-	flags.IntVar(&result.baseline, "baseline", 0, "baseline index; 0 selects balanced winner")
 	flags.DurationVar(
 		&result.interval, "interval", platform.DefaultInterval(),
 		"process sampling interval",
 	)
-	flags.Var(&commands, "command", "shell command; repeat to compare")
-	flags.Var(&commands, "c", "shell command; repeat to compare (shorthand)")
-	flags.Var(&labels, "label", "short command label; repeat in command order")
-	flags.StringVar(&name, "name", "", "display name for one command")
-	flags.StringVar(&result.prepare, "prepare", "", "one-time setup command")
+	// Ranking.
+	flags.Var(
+		&index, "index",
+		"balanced index dimensions; comma-separate: time, cpu, ram, disk",
+	)
+	flags.IntVar(&result.baseline, "baseline", 0, "baseline index; 0 selects balanced winner")
+	// Output.
 	flags.Var(
 		&formats, "format",
 		"saved format; repeat or comma-separate: html, svg, markdown, json, text",
 	)
+	flags.Var(&formats, "f", "saved format (shorthand)")
 	flags.StringVar(&result.output, "output", "", "directory for a saved report")
+	flags.StringVar(&result.output, "o", "", "directory for a saved report (shorthand)")
 	flags.BoolVar(&result.showOutput, "show-output", false, "show command output")
+	// TUI.
 	flags.DurationVar(
 		&result.duration, "duration", 0, "fixed TUI measurement duration",
 	)
+	flags.DurationVar(&result.duration, "d", 0, "fixed TUI measurement duration (shorthand)")
 	flags.UintVar(&width, "width", 0, "TUI columns; default inherits terminal")
 	flags.UintVar(&height, "height", 0, "TUI rows; default inherits terminal")
+	// Misc.
 	flags.BoolVar(&result.version, "version", false, "print version and exit")
-	flags.Usage = func() {
-		fmt.Fprintln(stderr, "Usage: snailrace [options] -- command [args...]")
-		fmt.Fprintln(stderr, "       snailrace [options] -c 'command' [-c 'command']")
-		fmt.Fprintln(stderr, "       snailrace tui [options] -- command [args...]")
-		fmt.Fprintln(stderr, "\nOptions:")
-		flags.PrintDefaults()
-	}
+	flags.BoolVar(&result.version, "v", false, "print version and exit (shorthand)")
+	flags.Usage = func() { printUsage(stderr) }
 	if err := flags.Parse(arguments); err != nil {
 		return result, err
 	}
@@ -93,6 +100,7 @@ func parseOptions(arguments []string, stderr io.Writer) (options, error) {
 		return result, nil
 	}
 	result.formats = formats.values
+	result.index = index.values
 	if err := validateDimensions(width, height); err != nil {
 		return result, err
 	}
@@ -103,16 +111,10 @@ func parseOptions(arguments []string, stderr io.Writer) (options, error) {
 		}
 		return result, err
 	}
-	if err := validateName(name, commands); err != nil {
+	if err := validateLabels(labels, commands); err != nil {
 		return result, err
 	}
-	if len(labels) > 0 && len(labels) != len(commands) {
-		return result, errors.New("label count must match command count")
-	}
-	if len(labels) > 0 && name != "" {
-		return result, errors.New("use either name or labels, not both")
-	}
-	result.specs = makeSpecs(commands, flags.Args(), name, labels)
+	result.specs = makeSpecs(commands, flags.Args(), labels)
 	if result.baseline > len(result.specs) {
 		return result, fmt.Errorf(
 			"baseline %d exceeds the %d configured tools",
@@ -120,4 +122,49 @@ func parseOptions(arguments []string, stderr io.Writer) (options, error) {
 		)
 	}
 	return result, nil
+}
+
+func printUsage(stderr io.Writer) {
+	fmt.Fprintln(stderr, "Usage: snailrace [options] -- command [args...]")
+	fmt.Fprintln(stderr, "       snailrace [options] -c 'command' [-c 'command']")
+	fmt.Fprintln(stderr, "       snailrace tui [options] -- command [args...]")
+	sections := []struct {
+		title string
+		lines []string
+	}{
+		{"Input", []string{
+			"-c, -command string   shell command; repeat to compare",
+			"-label string         display label; repeat once per command, in order",
+			"-prepare string       one-time setup command",
+		}},
+		{"Measurement", []string{
+			"-n, -runs int         number of measured runs",
+			"-warmups int          warmup runs per command",
+			"-interval duration    process sampling interval",
+		}},
+		{"Ranking", []string{
+			"-index list           balanced index dimensions: time, cpu, ram, disk",
+			"-baseline int         baseline index; 0 selects the balanced winner",
+		}},
+		{"Output", []string{
+			"-f, -format list      saved format: html, svg, markdown, json, text",
+			"-o, -output string    directory for a saved report",
+			"-show-output          forward command output to stderr",
+		}},
+		{"TUI (snailrace tui ...)", []string{
+			"-d, -duration duration   fixed TUI measurement duration",
+			"-width uint              TUI columns; default inherits terminal",
+			"-height uint             TUI rows; default inherits terminal",
+		}},
+		{"Misc", []string{
+			"-v, -version          print version and exit",
+			"-h, -help             show this help",
+		}},
+	}
+	for _, section := range sections {
+		fmt.Fprintf(stderr, "\n%s:\n", section.title)
+		for _, line := range section.lines {
+			fmt.Fprintf(stderr, "  %s\n", line)
+		}
+	}
 }

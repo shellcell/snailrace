@@ -60,6 +60,7 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 		BaselineAutomatic: options.baseline == 0,
 		OrderSeed:         measuredAt.UnixNano(),
 		OrderMethod:       "randomized counterbalanced cyclic blocks",
+		IndexDimensions:   options.index,
 		OutputMode:        outputMode(options),
 	}
 	measurementOrder := runner.BalancedSchedule(

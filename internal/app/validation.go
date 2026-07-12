@@ -32,6 +32,9 @@ func validateOptions(result options, commands []string, positional int) error {
 			return fmt.Errorf("unknown report format %q", format)
 		}
 	}
+	if len(result.index) == 0 {
+		return errors.New("balanced index requires at least one dimension")
+	}
 	if len(commands) > 0 && positional > 0 {
 		return errors.New("use positional arguments or -command, not both")
 	}
@@ -67,9 +70,18 @@ func validateDimensions(width, height uint) error {
 	return nil
 }
 
-func validateName(name string, commands []string) error {
-	if name != "" && len(commands) > 1 {
-		return errors.New("name can only be used with one command")
+func validateLabels(labels, commands []string) error {
+	if len(labels) == 0 {
+		return nil
+	}
+	if len(commands) > 0 {
+		if len(labels) != len(commands) {
+			return errors.New("label count must match command count")
+		}
+		return nil
+	}
+	if len(labels) > 1 {
+		return errors.New("only one label is allowed for a single command")
 	}
 	return nil
 }
