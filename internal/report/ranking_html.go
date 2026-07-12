@@ -49,6 +49,11 @@ func writeHTMLRanking(writer io.Writer, report model.Report) {
 			ramValue = rankingHTMLCell(
 				formatBytes(row.ramValue), row.ramScore, row.ramRank, true,
 			)
+		} else if ranking.ramPresent {
+			ramValue = fmt.Sprintf(
+				`<strong>%s</strong><span class="delta muted">sampling-limited</span>`,
+				html.EscapeString(formatBytes(row.ramValue)),
+			)
 		}
 		class := ""
 		if row.overallRank == 1 {

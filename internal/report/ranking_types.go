@@ -25,17 +25,19 @@ type categoryWinner struct {
 }
 
 type rankingData struct {
-	rows           []rankingRow
-	winners        []categoryWinner
-	primaryLabel   string
-	primaryUnit    func(float64) string
-	ramAvailable   bool
-	primaryRatio   bool
-	cpuRatio       bool
-	footprintRatio bool
-	indexPrimary   bool
-	indexCPU       bool
-	indexRAM       bool
-	indexFootprint bool
-	bestOverall    float64
+	rows             []rankingRow
+	winners          []categoryWinner
+	primaryLabel     string
+	primaryUnit      func(float64) string
+	ramAvailable     bool
+	ramPresent       bool
+	samplingInterval string
+	primaryRatio     bool
+	cpuRatio         bool
+	footprintRatio   bool
+	indexPrimary     bool
+	indexCPU         bool
+	indexRAM         bool
+	indexFootprint   bool
+	bestOverall      float64
 }

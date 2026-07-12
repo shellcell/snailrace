@@ -19,7 +19,7 @@ func writeCompactText(writer io.Writer, report model.Report) error {
 	var body strings.Builder
 	body.WriteString("\n")
 	if len(report.Benchmarks) == 1 {
-		writeCompactSingle(&body, report)
+		writeCompactSingle(&body, report, terminal)
 	} else if len(report.Benchmarks) > 1 {
 		writeCompactBars(&body, report, terminal)
 	}
@@ -30,6 +30,7 @@ func writeCompactText(writer io.Writer, report model.Report) error {
 // compactMetric describes one bar group: a per-tool value with optional σ.
 type compactMetric struct {
 	name      string
+	note      string
 	unit      func(float64) string
 	available bool
 	value     func(rankingRow) float64
@@ -43,6 +44,14 @@ func compactMetrics(report model.Report, ranking rankingData) []compactMetric {
 	if fixedTUI {
 		primaryStdDev = func(s model.Summary) float64 { return s.AverageCPUPercent.StdDev }
 		cpuStdDev = primaryStdDev
+	}
+	ramNote := ""
+	if ranking.ramPresent && !ranking.ramAvailable {
+		ramNote = "  (sampling-limited · excluded from balanced index"
+		if ranking.samplingInterval != "" {
+			ramNote += "; lower -interval, now " + ranking.samplingInterval
+		}
+		ramNote += ")"
 	}
 	return []compactMetric{
 		{
@@ -58,7 +67,7 @@ func compactMetrics(report model.Report, ranking rankingData) []compactMetric {
 			stdDev:    cpuStdDev,
 		},
 		{
-			name: "RAM", unit: formatBytes, available: ranking.ramAvailable,
+			name: "RAM", note: ramNote, unit: formatBytes, available: ranking.ramPresent,
 			value:  func(r rankingRow) float64 { return r.ramValue },
 			stdDev: func(s model.Summary) float64 { return s.MeanResidentBytes.StdDev },
 		},
@@ -94,7 +103,7 @@ func writeCompactBars(body *strings.Builder, report model.Report, terminal bool)
 		if !metric.available {
 			continue
 		}
-		fmt.Fprintf(body, "%s\n", metric.name)
+		fmt.Fprintf(body, "%s%s\n", metric.name, redNote(metric.note, terminal))
 		writeBarGroup(body, report, terminal, labelWidth, rows, metric.value, func(r rankingRow) string {
 			text := metric.unit(metric.value(r))
 			if metric.stdDev != nil {
@@ -145,7 +154,7 @@ func writeBarGroup(
 	body.WriteString("\n")
 }
 
-func writeCompactSingle(body *strings.Builder, report model.Report) {
+func writeCompactSingle(body *strings.Builder, report model.Report, terminal bool) {
 	ranking := calculateRanking(report)
 	if len(ranking.rows) == 0 {
 		return
@@ -160,9 +169,17 @@ func writeCompactSingle(body *strings.Builder, report model.Report) {
 			sigma := metric.stdDev(report.Benchmarks[row.benchmark].Summary)
 			text += " ± " + metric.unit(sigma)
 		}
-		fmt.Fprintf(body, "  %-5s %s\n", metric.name, text)
+		fmt.Fprintf(body, "  %-5s %s%s\n", metric.name, text, redNote(metric.note, terminal))
 	}
 	body.WriteString("\n")
+}
+
+// redNote colors a metric remark red on a terminal and leaves it plain otherwise.
+func redNote(note string, terminal bool) string {
+	if note == "" || !terminal {
+		return note
+	}
+	return ansi("191;97;106", note)
 }
 
 func textBar(fraction float64, width int) string {
