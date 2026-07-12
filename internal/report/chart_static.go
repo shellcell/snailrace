@@ -58,6 +58,13 @@ func staticCostChart(
 	}
 	return svgChart{
 		kind: "distribution", title: name, slug: chartSlug(name),
-		body: body.String(), height: height,
+		description: staticCostChartDescription(),
+		body:        body.String(), height: height,
 	}
+}
+
+func staticCostChartDescription() string {
+	return "Shows statically discovered disk footprint. Math: footprint = executable bytes + " +
+		"linked-library bytes. This is not a runtime measurement and has no confidence " +
+		"interval; lower values mean a smaller deployed footprint."
 }

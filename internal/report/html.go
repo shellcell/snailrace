@@ -39,7 +39,15 @@ gap:10px;padding:6px 9px;border-bottom:1px solid var(--line)}
 table{background:var(--panel);border:1px solid var(--line)}.scroll{overflow-x:auto}
 .chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0 22px}
 .chart-column{display:flex;flex-direction:column;gap:10px;min-width:0}
-.chart{min-width:0}.chart svg{display:block;width:100%;height:auto}
+.chart{min-width:0}.chart-frame{position:relative;width:100%;max-width:720px}
+.chart svg{display:block;width:100%;height:auto}
+.chart-help{position:absolute;top:8px;right:8px;z-index:2;width:24px;height:24px;cursor:help;
+border:1px solid var(--line);border-radius:50%;background:#2e3440;color:var(--accent);font-weight:700}
+.chart-help:focus{outline:2px solid var(--accent);outline-offset:2px}
+.chart-tooltip{display:none;position:absolute;top:36px;right:8px;z-index:3;
+max-width:min(360px,calc(100% - 16px));padding:8px 10px;border:1px solid var(--line);
+border-radius:5px;background:#2e3440;color:var(--ink);box-shadow:0 8px 24px #0006}
+.chart-help:hover+.chart-tooltip,.chart-help:focus+.chart-tooltip,.chart-tooltip:hover{display:block}
 .badge{color:#2e3440;background:var(--accent);padding:3px 7px;border-radius:4px;font-size:.7em}
 .good{color:#a3be8c}.bad{color:#bf616a}.uncertain{color:#ebcb8b}.neutral{color:#81a1c1}
 .delta{display:block;font-size:.85em}.comparison td:nth-child(n+2){vertical-align:top}
@@ -124,7 +132,16 @@ func writeHTMLChartSection(writer io.Writer, title string, charts []svgChart) {
 func writeHTMLChartColumn(writer io.Writer, charts []svgChart) {
 	fmt.Fprint(writer, `<div class="chart-column">`)
 	for _, chart := range charts {
-		fmt.Fprintf(writer, "<div class=\"chart\">%s</div>", chart.html())
+		explanation := html.EscapeString(chart.explanation())
+		label := html.EscapeString("Explain " + chart.accessibleTitle())
+		fmt.Fprintf(
+			writer,
+			`<div class="chart"><div class="chart-frame">`+
+				`<button type="button" class="chart-help" `+
+				`aria-label="%s" title="%s">?</button>`+
+				`<div class="chart-tooltip" role="tooltip">%s</div>%s</div></div>`,
+			label, explanation, explanation, chart.html(),
+		)
 	}
 	fmt.Fprint(writer, "</div>")
 }

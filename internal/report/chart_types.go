@@ -2,6 +2,7 @@ package report
 
 import (
 	"fmt"
+	"html"
 	"math"
 	"strings"
 	"unicode"
@@ -19,11 +20,12 @@ const svgChartStyle = `<style>` +
 	`</style>`
 
 type svgChart struct {
-	kind   string
-	title  string
-	slug   string
-	body   string
-	height int
+	kind        string
+	title       string
+	slug        string
+	description string
+	body        string
+	height      int
 }
 
 type chartMetric struct {
@@ -43,17 +45,39 @@ func (chart svgChart) html() string {
 	return fmt.Sprintf(
 		`<svg xmlns="http://www.w3.org/2000/svg" role="img" `+
 			`viewBox="0 0 %d %d" width="100%%" `+
-			`style="max-width:%dpx;font-family:monospace">%s</svg>`,
-		chartWidth, chart.height, chartWidth, chart.body,
+			`style="max-width:%dpx;font-family:monospace">%s%s</svg>`,
+		chartWidth, chart.height, chartWidth, chart.metadata(), chart.body,
 	)
 }
 
 func (chart svgChart) embedded(x, y int) string {
 	return fmt.Sprintf(
 		`<svg x="%d" y="%d" width="%d" height="%d" `+
-			`viewBox="0 0 %d %d">%s</svg>`,
-		x, y, chartWidth, chart.height, chartWidth, chart.height, chart.body,
+			`viewBox="0 0 %d %d">%s%s</svg>`,
+		x, y, chartWidth, chart.height, chartWidth, chart.height,
+		chart.metadata(), chart.body,
 	)
+}
+
+func (chart svgChart) metadata() string {
+	return fmt.Sprintf(
+		`<title>%s</title><desc>%s</desc>`,
+		html.EscapeString(chart.accessibleTitle()), html.EscapeString(chart.explanation()),
+	)
+}
+
+func (chart svgChart) accessibleTitle() string {
+	if chart.title != "" {
+		return chart.title
+	}
+	return "Snailrace chart"
+}
+
+func (chart svgChart) explanation() string {
+	if chart.description != "" {
+		return chart.description
+	}
+	return chart.accessibleTitle()
 }
 
 func chartColor(index, _ int) string {

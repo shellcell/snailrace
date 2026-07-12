@@ -34,6 +34,12 @@ func commandLegendChart(report model.Report) svgChart {
 	}
 	return svgChart{
 		kind: "commands", title: "Command legend", slug: "command-legend",
-		body: body.String(), height: height,
+		description: commandLegendChartDescription(),
+		body:        body.String(), height: height,
 	}
+}
+
+func commandLegendChartDescription() string {
+	return "Maps stable chart colors to the exact commands measured. This is a legend, " +
+		"not a measurement chart."
 }

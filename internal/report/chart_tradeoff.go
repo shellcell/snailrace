@@ -103,6 +103,31 @@ func tradeoffChart(report model.Report, xMetric, yMetric tradeoffMetric) svgChar
 	title := xMetric.name + " vs " + yMetric.name
 	return svgChart{
 		kind: "tradeoff", title: title, slug: chartSlug(title),
-		body: body.String(), height: height,
+		description: tradeoffChartDescription(xMetric.name, yMetric.name),
+		body:        body.String(), height: height,
 	}
+}
+
+func tradeoffChartDescription(xMetric, yMetric string) string {
+	return "Plots " + xMetric + " against " + yMetric + " for each tool. " +
+		"X: " + tradeoffMetricFormula(xMetric) + " Y: " + tradeoffMetricFormula(yMetric) + " " +
+		"Points closer to the lower-left use less of both resources. " +
+		"This chart uses point estimates only and does not prove dominance when " +
+		"measurements overlap."
+}
+
+func tradeoffMetricFormula(metric string) string {
+	switch metric {
+	case "Time":
+		return "mean wall time."
+	case "Average CPU":
+		return "mean average CPU percent."
+	case "Total CPU":
+		return "mean(user CPU + system CPU)."
+	case "RAM aggregate":
+		return "sqrt(mean of per-run mean RSS * mean of per-run peak RSS)."
+	case "Linked size":
+		return "executable bytes + linked-library bytes."
+	}
+	return "point estimate."
 }

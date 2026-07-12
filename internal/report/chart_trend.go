@@ -74,6 +74,14 @@ func measurementTrendChart(report model.Report) svgChart {
 	}
 	return svgChart{
 		kind: "trend", title: "Measurement trends", slug: "measurement-trends",
-		body: body.String(), height: height,
+		description: measurementTrendChartDescription(),
+		body:        body.String(), height: height,
 	}
+}
+
+func measurementTrendChartDescription() string {
+	return "Shows run-to-run movement for each metric for a single tool. Each lane uses " +
+		"its own y-scale. Math: lane y = linear interpolation between that metric's " +
+		"observed min and max for this tool, so compare shape and stability within a lane, " +
+		"not vertical magnitude across different metrics."
 }

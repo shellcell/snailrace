@@ -99,6 +99,64 @@ func rankingBarChart(
 	}
 	return svgChart{
 		kind: "ranking", title: metric.name, slug: chartSlug(metric.name),
-		body: body.String(), height: height,
+		description: rankingChartDescription(metric.name, ranking),
+		body:        body.String(), height: height,
 	}
+}
+
+func rankingChartDescription(metric string, ranking rankingData) string {
+	switch metric {
+	case "BALANCED INDEX":
+		return "Ranks tools by balanced index, the geometric mean of included normalized " +
+			"cost scores. Included here: " + balancedIndexCategories(ranking) +
+			". For positive categories, score = value / best value; categories with " +
+			"nonpositive or unavailable values are omitted. RAM combines normalized mean RSS " +
+			"and peak RSS with a geometric mean. Lower is better; this is descriptive."
+	case "TIME":
+		return "Ranks tools by mean wall-clock time. Math: mean = sum(run wall time) / n. " +
+			"Lower bars are better; outlines mark category leaders. " +
+			"This ranking does not include uncertainty intervals."
+	case "CPU", "CPU COST":
+		return "Ranks tools by CPU cost. Math: command mode value = mean(user CPU + system CPU); " +
+			"fixed-duration TUI value = mean average CPU percent. Lower bars are better; " +
+			"this ranking does not include uncertainty intervals."
+	case "RAM AGGREGATE":
+		return "Ranks tools by RAM aggregate. Math: value = sqrt(mean of per-run mean RSS " +
+			"* mean of per-run peak RSS), using sampled tree RSS. Lower bars are better; " +
+			"this ranking does not include uncertainty intervals."
+	case "LINKED SIZE":
+		return "Ranks tools by linked disk footprint. Math: value = executable bytes + " +
+			"linked-library bytes discovered before measurement. Lower bars are better; " +
+			"this ranking has no runtime uncertainty interval."
+	}
+	return "Ranks tools by the " + strings.ToLower(metric) +
+		" point estimate. Lower bars are better for this cost chart; outlines mark " +
+		"category leaders. This ranking does not include uncertainty intervals."
+}
+
+func balancedIndexCategories(ranking rankingData) string {
+	var categories []string
+	if ranking.primaryRatio && ranking.primaryLabel != "CPU" {
+		categories = append(categories, primaryCategoryName(ranking.primaryLabel))
+	}
+	if ranking.cpuRatio {
+		categories = append(categories, "CPU cost")
+	}
+	if ranking.ramAvailable {
+		categories = append(categories, "RAM aggregate")
+	}
+	if ranking.footprintRatio {
+		categories = append(categories, "linked size")
+	}
+	if len(categories) == 0 {
+		return "none"
+	}
+	return strings.Join(categories, ", ")
+}
+
+func primaryCategoryName(label string) string {
+	if label == "TIME" {
+		return "wall time"
+	}
+	return strings.ToLower(label)
 }

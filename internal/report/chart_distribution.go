@@ -88,7 +88,8 @@ func absoluteDistributionChart(report model.Report, metric chartMetric) svgChart
 	}
 	return svgChart{
 		kind: "distribution", title: metric.name, slug: chartSlug(metric.name),
-		body: body.String(), height: height,
+		description: distributionChartDescription(metric.name),
+		body:        body.String(), height: height,
 	}
 }
 
@@ -102,6 +103,18 @@ func unavailableChart(title, operatingSystem string) svgChart {
 		)
 	return svgChart{
 		kind: "distribution", title: title, slug: chartSlug(title),
-		body: body, height: 66,
+		description: unavailableChartDescription(title, operatingSystem),
+		body:        body, height: 66,
 	}
+}
+
+func distributionChartDescription(metric string) string {
+	return "Shows individual run values for " + metric + ". Dots are raw runs, " +
+		"diamonds are arithmetic means, and whiskers are pointwise 95% confidence " +
+		"intervals for the mean when n >= 2. Math: CI = mean +/- t(0.975, n-1) * " +
+		"sample_sd / sqrt(n). Lower values are usually better for cost metrics."
+}
+
+func unavailableChartDescription(title, operatingSystem string) string {
+	return title + " is unavailable because this metric is not collected on " + operatingSystem + "."
 }

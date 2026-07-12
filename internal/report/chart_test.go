@@ -139,3 +139,89 @@ func TestFixedTUIRankingChartUsesCPUUnits(t *testing.T) {
 		t.Fatal("fixed TUI primary ranking chart should show average CPU percentage")
 	}
 }
+
+func TestBalancedIndexDescriptionListsIncludedCategories(t *testing.T) {
+	report := model.Report{
+		Config: model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{
+			benchmarkWithResourceCosts("first", 1, 0.5, 100, 200, 1000),
+			benchmarkWithResourceCosts("second", 2, 0.7, 120, 260, 1200),
+		},
+	}
+	description := rankingCharts(report)[0].description
+	for _, expected := range []string{
+		"Included here: wall time, CPU cost, RAM aggregate, linked size",
+		"score = value / best value",
+	} {
+		if !strings.Contains(description, expected) {
+			t.Fatalf("balanced-index description missing %q: %s", expected, description)
+		}
+	}
+}
+
+func TestChartsHaveExplicitDescriptions(t *testing.T) {
+	report := model.Report{
+		Config: model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{
+			benchmarkWithWallTimes("baseline", 10, 10),
+			benchmarkWithWallTimes("candidate", 8, 8),
+		},
+	}
+	single := model.Report{
+		Config:     model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{benchmarkWithWallTimes("tool", 1, 2)},
+	}
+	chartSets := [][]svgChart{
+		append([]svgChart{commandLegendChart(report)}, reportCharts(report)...),
+		reportCharts(single),
+	}
+	for _, charts := range chartSets {
+		for _, chart := range charts {
+			if chart.height > 0 && chart.description == "" {
+				t.Fatalf("chart %q is missing a description", chart.title)
+			}
+		}
+	}
+}
+
+func benchmarkWithResourceCosts(
+	name string,
+	wallSeconds, cpuSeconds, meanResident, peakResident, footprint float64,
+) model.Benchmark {
+	runs := []model.Run{{
+		Index: 1, WallSeconds: wallSeconds,
+		CPUUserSeconds: cpuSeconds / 2, CPUSystemSeconds: cpuSeconds / 2,
+		MeanResidentBytes: meanResident, PeakResidentBytes: peakResident,
+	}}
+	return model.Benchmark{
+		Tool:    model.ToolInfo{Name: name, DiskFootprintBytes: int64(footprint)},
+		Runs:    runs,
+		Summary: model.Summarize(runs),
+	}
+}
+
+func TestChartHTMLIncludesMetadataAndTooltip(t *testing.T) {
+	chart := svgChart{
+		kind: "distribution", title: "Speed & cost", slug: "speed-cost",
+		description: `Explains "quoted" chart text.`,
+		body:        svgChartStyle, height: 60,
+	}
+	svg := chart.html()
+	if !strings.Contains(svg, `<title>Speed &amp; cost</title>`) {
+		t.Fatalf("SVG title metadata missing: %s", svg)
+	}
+	if !strings.Contains(svg, `<desc>Explains &#34;quoted&#34; chart text.</desc>`) {
+		t.Fatalf("SVG description metadata missing: %s", svg)
+	}
+	var output strings.Builder
+	writeHTMLChartColumn(&output, []svgChart{chart})
+	html := output.String()
+	if !strings.Contains(html, `class="chart-frame"`) ||
+		!strings.Contains(html, `class="chart-help"`) ||
+		!strings.Contains(html, `role="tooltip"`) {
+		t.Fatalf("HTML tooltip markup missing: %s", html)
+	}
+	if !strings.Contains(html, `Explains &#34;quoted&#34; chart text.`) {
+		t.Fatalf("HTML tooltip text missing or unescaped: %s", html)
+	}
+}

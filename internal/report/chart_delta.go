@@ -152,6 +152,15 @@ func renderForest(
 	}
 	return svgChart{
 		kind: "baseline", title: title, slug: chartSlug(title),
-		body: body.String(), height: height,
+		description: baselineChartDescription(title, baseline),
+		body:        body.String(), height: height,
 	}
+}
+
+func baselineChartDescription(title, baseline string) string {
+	return "Shows each candidate's percent change in " + title + " relative to baseline " +
+		baseline + ". Math: percent delta = (candidate mean / baseline mean - 1) * 100. " +
+		"Whiskers are paired, pointwise 95% confidence intervals for run differences, " +
+		"scaled by the baseline mean when percent deltas are available. Left of zero " +
+		"means lower than baseline."
 }
