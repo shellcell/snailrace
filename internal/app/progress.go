@@ -4,16 +4,20 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/term"
 
 	"perftool/internal/runner"
 )
 
-func progressRenderer(writer io.Writer, enabled bool) func(runner.ProgressEvent) {
+func progressRenderer(
+	writer io.Writer, enabled bool, nameWidth int,
+) func(runner.ProgressEvent) {
 	file, ok := writer.(interface{ Fd() uintptr })
 	if !enabled || !ok || !term.IsTerminal(int(file.Fd())) {
 		return nil
@@ -38,17 +42,18 @@ func progressRenderer(writer io.Writer, enabled bool) func(runner.ProgressEvent)
 		clearProgress(writer, renderedLines)
 		width, _, _ := term.GetSize(int(file.Fd()))
 		lines := append(
-			[]string{progressStatus(event)}, progressRaceLines(event, width)...,
+			[]string{progressStatus(event, nameWidth)}, progressRaceLines(event, width)...,
 		)
 		fmt.Fprint(writer, strings.Join(lines, "\n"))
 		renderedLines = len(lines)
 	}
 }
 
-func progressStatus(event runner.ProgressEvent) string {
-	phase := fmt.Sprintf("run %d/%d", event.Iteration, event.Iterations)
+func progressStatus(event runner.ProgressEvent, nameWidth int) string {
+	iteration := digitWidth(event.Iterations)
+	phase := fmt.Sprintf("run %*d/%d", iteration, event.Iteration, event.Iterations)
 	if event.Warmup {
-		phase = fmt.Sprintf("warmup %d/%d", event.Iteration, event.Iterations)
+		phase = fmt.Sprintf("warmup %*d/%d", iteration, event.Iteration, event.Iterations)
 	}
 	estimate := "calibrating estimates"
 	if event.FixedDuration > 0 {
@@ -72,11 +77,38 @@ func progressStatus(event runner.ProgressEvent) string {
 		step = event.Total
 	}
 	return fmt.Sprintf(
-		"\x1b[38;2;136;192;208m[%d/%d]\x1b[0m "+
-			"🐌 tool %d/%d %s · %s · %s · ETA %s",
-		step, event.Total, event.Tool, event.ToolCount, event.ToolName, phase,
-		estimate, progressClock(event.ETA),
+		"\x1b[38;2;136;192;208m[%*d/%d]\x1b[0m "+
+			"🐌 ETA %-6s · tool %*d/%d %s · %s · %s",
+		digitWidth(event.Total), step, event.Total,
+		progressClock(event.ETA),
+		digitWidth(event.ToolCount), event.Tool, event.ToolCount,
+		padName(event.ToolName, nameWidth), phase,
+		estimate,
 	)
+}
+
+func digitWidth(value int) int {
+	if value < 10 {
+		return 1
+	}
+	return len(strconv.Itoa(value))
+}
+
+func padName(name string, width int) string {
+	if pad := width - utf8.RuneCountInString(name); pad > 0 {
+		return name + strings.Repeat(" ", pad)
+	}
+	return name
+}
+
+func specNameWidth(specs []runner.Spec) int {
+	width := 0
+	for _, spec := range specs {
+		if count := utf8.RuneCountInString(spec.Name); count > width {
+			width = count
+		}
+	}
+	return width
 }
 
 func clearProgress(writer io.Writer, lines int) {

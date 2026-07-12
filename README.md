@@ -78,6 +78,7 @@ Useful options:
 | `-baseline` | 1-based override; default `0` selects the balanced winner |
 | `-f`, `-format` | Saved format; repeat or comma-separate values; default `html` |
 | `-o`, `-output` | Save selected formats in this directory |
+| `-verbose` | Print full per-tool statistical tables to stdout instead of the compact summary |
 | `-show-output` | Forward measured command output to stderr |
 | `tui` | Run commands inside a pseudo-terminal |
 | `-d`, `-duration` | Fixed TUI duration; required for comparisons |
@@ -86,8 +87,14 @@ Useful options:
 
 Command output is discarded by default so it cannot corrupt stdout reports.
 Raw observations are retained by JSON reports.
-Human-readable text reports are always written to stdout and use ANSI colors
-when stdout is a terminal. `-format` controls additional artifacts created by
+Before measurement starts, a legend maps each tool label to its full command,
+colored per tool when stderr is a terminal. Human-readable text reports are
+always written to stdout and use ANSI colors when stdout is a terminal. By
+default stdout shows a compact summary: per-tool bar charts for the balanced
+index, time, CPU, RAM, and disk, each with the mean and standard deviation, bars
+colored per tool. `-verbose` prints the full per-tool statistical tables and
+baseline-delta tables instead; that detail is also always available in JSON and
+HTML reports. `-format` controls additional artifacts created by
 `-output`; each path is announced on stderr. Markdown reports live in a report
 directory and reference separate SVG files in its `charts` subdirectory. SVG
 output creates that charts directory without report tables.

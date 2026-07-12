@@ -109,10 +109,28 @@ func TestProgressStatusRemainsFirstLineContent(t *testing.T) {
 		ToolName: "first", Tool: 1, ToolCount: 2,
 		Iteration: 2, Iterations: 3, Completed: 1, Total: 6,
 		ETA: time.Second,
-	})
-	for _, expected := range []string{"[2/6]", "🐌 tool 1/2 first", "run 2/3", "ETA 1s"} {
+	}, 0)
+	for _, expected := range []string{"[2/6]", "🐌 ETA 1s", "tool 1/2 first", "run 2/3"} {
 		if !strings.Contains(status, expected) {
 			t.Fatalf("status does not contain %q: %q", expected, status)
+		}
+	}
+}
+
+func TestProgressStatusAlignsNumbersAndName(t *testing.T) {
+	status := progressStatus(runner.ProgressEvent{
+		ToolName: "a", Tool: 2, ToolCount: 4,
+		Iteration: 3, Iterations: 300, Completed: 0, Total: 1204,
+	}, 8)
+	expected := []string{
+		"[   1/1204]",                       // step padded to the total width
+		"tool 2/4",                          // tool index within one-digit count
+		"a" + strings.Repeat(" ", 7) + " ·", // name padded to the longest name
+		"run   3/300",                       // iteration padded to the run count
+	}
+	for _, want := range expected {
+		if !strings.Contains(status, want) {
+			t.Fatalf("status not aligned, missing %q: %q", want, status)
 		}
 	}
 }

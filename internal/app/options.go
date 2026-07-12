@@ -29,6 +29,7 @@ type options struct {
 	formats       []string
 	prepare       string
 	index         []string
+	verbose       bool
 	showOutput    bool
 	version       bool
 	tui           bool
@@ -81,6 +82,7 @@ func parseOptions(arguments []string, stderr io.Writer) (options, error) {
 	flags.Var(&formats, "f", "saved format (shorthand)")
 	flags.StringVar(&result.output, "output", "", "directory for a saved report")
 	flags.StringVar(&result.output, "o", "", "directory for a saved report (shorthand)")
+	flags.BoolVar(&result.verbose, "verbose", false, "print full statistical tables to stdout")
 	flags.BoolVar(&result.showOutput, "show-output", false, "show command output")
 	// TUI.
 	flags.DurationVar(
@@ -149,6 +151,7 @@ func printUsage(stderr io.Writer) {
 		{"Output", []string{
 			"-f, -format list      saved format: html, svg, markdown, json, text",
 			"-o, -output string    directory for a saved report",
+			"-verbose              print full statistical tables to stdout",
 			"-show-output          forward command output to stderr",
 		}},
 		{"TUI (snailrace tui ...)", []string{

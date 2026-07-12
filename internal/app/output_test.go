@@ -12,10 +12,11 @@ import (
 func TestSavingAlsoWritesCompleteReportToStdout(t *testing.T) {
 	directory := t.TempDir()
 	var stdout, stderr bytes.Buffer
+	runs := []model.Run{{Index: 1, WallSeconds: 1}, {Index: 2, WallSeconds: 2}}
 	report := model.Report{
 		Config: model.Config{Mode: "command", Baseline: 1},
 		Benchmarks: []model.Benchmark{{
-			Tool: model.ToolInfo{Name: "test-tool"},
+			Tool: model.ToolInfo{Name: "test-tool"}, Runs: runs, Summary: model.Summarize(runs),
 		}},
 	}
 	if err := writeResult(
@@ -23,7 +24,7 @@ func TestSavingAlsoWritesCompleteReportToStdout(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout.String(), "Snailrace report") {
+	if !strings.Contains(stdout.String(), "TIME") {
 		t.Fatal("stdout does not contain the report")
 	}
 	if !strings.Contains(stderr.String(), "Report saved to") {

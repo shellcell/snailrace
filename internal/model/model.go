@@ -112,4 +112,5 @@ type Report struct {
 	Host       HostInfo    `json:"host"`
 	Benchmarks []Benchmark `json:"benchmarks"`
 	Notes      []string    `json:"notes,omitempty"`
+	Verbose    bool        `json:"-"`
 }

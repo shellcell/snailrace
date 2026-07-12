@@ -63,6 +63,9 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 		IndexDimensions:   options.index,
 		OutputMode:        outputMode(options),
 	}
+	if !interactiveTUI {
+		printCommandLegend(stderr, options.specs)
+	}
 	measurementOrder := runner.BalancedSchedule(
 		len(options.specs), config.Runs, config.OrderSeed,
 	)
@@ -86,6 +89,7 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 			Progress: progressRenderer(
 				stderr,
 				!options.showOutput && !interactiveTUI,
+				specNameWidth(options.specs),
 			),
 		},
 	)
@@ -98,7 +102,7 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 	_, host.MemoryAfterBytes = platform.Memory()
 	result := model.Report{
 		MeasuredAt: measuredAt, Config: config, Host: host,
-		Benchmarks: benchmarks,
+		Benchmarks: benchmarks, Verbose: options.verbose,
 		Notes: platformNotes(
 			options.tui, options.duration, len(options.specs) > 1,
 			config.BaselineAutomatic, config.OrderSeed, config.OutputMode,

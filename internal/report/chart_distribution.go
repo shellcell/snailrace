@@ -60,7 +60,7 @@ func absoluteDistributionChart(report model.Report, metric chartMetric) svgChart
 			jitter := (runIndex%3 - 1) * 5
 			fmt.Fprintf(
 				&body, `<circle class="run-dot" cx="%.1f" cy="%d" `+
-					`r="3.5" fill="%s" opacity=".65"/>`,
+					`r="1.75" fill="%s" opacity=".65"/>`,
 				position(metric.run(run)), y-4+jitter, color,
 			)
 		}

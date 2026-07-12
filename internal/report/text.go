@@ -13,6 +13,13 @@ import (
 )
 
 func writeText(writer io.Writer, report model.Report) error {
+	if !report.Verbose {
+		return writeCompactText(writer, report)
+	}
+	return writeVerboseText(writer, report)
+}
+
+func writeVerboseText(writer io.Writer, report model.Report) error {
 	var output bytes.Buffer
 	w := tabwriter.NewWriter(&output, 0, 4, 2, ' ', 0)
 	fmt.Fprintf(w, "Snailrace report\t%s\n", report.MeasuredAt.Format(

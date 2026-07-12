@@ -106,7 +106,7 @@ func measurementTrendChart(report model.Report, benchmarkIndex int, group chartG
 			)
 			for index, value := range values {
 				fmt.Fprintf(
-					&body, `<circle class="trend-dot" cx="%.1f" cy="%.1f" r="3" fill="%s"/>`,
+					&body, `<circle class="trend-dot" cx="%.1f" cy="%.1f" r="1.5" fill="%s"/>`,
 					x(index), positionY(value), color,
 				)
 			}

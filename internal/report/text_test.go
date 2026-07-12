@@ -10,7 +10,8 @@ import (
 
 func TestFixedTUIComparisonEmphasizesResources(t *testing.T) {
 	input := model.Report{
-		Config: model.Config{Mode: "tui", DurationSeconds: 5},
+		Config:  model.Config{Mode: "tui", DurationSeconds: 5},
+		Verbose: true,
 		Benchmarks: []model.Benchmark{
 			{Tool: model.ToolInfo{Name: "htop"}},
 			{Tool: model.ToolInfo{Name: "btop"}},
@@ -25,6 +26,66 @@ func TestFixedTUIComparisonEmphasizesResources(t *testing.T) {
 	}
 	if strings.Contains(output.String(), "Relative") {
 		t.Fatal("TUI comparison should not rank fixed wall time")
+	}
+}
+
+func TestCompactReportShowsBarsAndOmitsDetail(t *testing.T) {
+	report := model.Report{
+		Config: model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{
+			rankingBenchmark("first", 1, 1, 100, 200, 1000),
+			rankingBenchmark("second", 2, 2, 120, 260, 1200),
+		},
+		Notes: []string{"a methodology note"},
+	}
+	var output bytes.Buffer
+	if err := writeText(&output, report); err != nil {
+		t.Fatal(err)
+	}
+	text := output.String()
+	for _, want := range []string{"BALANCED", "TIME", "█"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("compact report missing %q:\n%s", want, text)
+		}
+	}
+	for _, unwanted := range []string{"Statistical detail", "95% CI mean", "Note"} {
+		if strings.Contains(text, unwanted) {
+			t.Fatalf("compact report should omit %q:\n%s", unwanted, text)
+		}
+	}
+}
+
+func TestVerboseReportKeepsStatisticalDetail(t *testing.T) {
+	report := model.Report{
+		Config:  model.Config{Mode: "command", Baseline: 1},
+		Verbose: true,
+		Benchmarks: []model.Benchmark{
+			rankingBenchmark("first", 1, 1, 100, 200, 1000),
+			rankingBenchmark("second", 2, 2, 120, 260, 1200),
+		},
+		Notes: []string{"a methodology note"},
+	}
+	var output bytes.Buffer
+	if err := writeText(&output, report); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "Statistical detail") {
+		t.Fatal("verbose report should keep the statistical detail")
+	}
+}
+
+func TestCompactSingleToolListsKeyMetrics(t *testing.T) {
+	report := model.Report{
+		Config:     model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{rankingBenchmark("solo", 1, 1, 100, 200, 1000)},
+	}
+	var output bytes.Buffer
+	if err := writeText(&output, report); err != nil {
+		t.Fatal(err)
+	}
+	text := output.String()
+	if !strings.Contains(text, "TIME") || strings.Contains(text, "█") {
+		t.Fatalf("single-tool compact report should list metrics without bars:\n%s", text)
 	}
 }
 
