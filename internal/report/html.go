@@ -108,6 +108,10 @@ func chartSections(charts []svgChart) []chartSection {
 	}
 	var sections []chartSection
 	for _, definition := range definitions {
+		if definition.kind == "trend" {
+			sections = append(sections, trendChartSections(definition.title, charts)...)
+			continue
+		}
 		section := chartSection{title: definition.title}
 		for _, chart := range charts {
 			if chart.kind == definition.kind {
@@ -121,9 +125,31 @@ func chartSections(charts []svgChart) []chartSection {
 	return sections
 }
 
+func trendChartSections(title string, charts []svgChart) []chartSection {
+	var sections []chartSection
+	indexes := make(map[string]int)
+	for _, chart := range charts {
+		if chart.kind != "trend" {
+			continue
+		}
+		sectionTitle := title
+		if chart.subsection != "" {
+			sectionTitle += " · " + chart.subsection
+		}
+		index, ok := indexes[sectionTitle]
+		if !ok {
+			indexes[sectionTitle] = len(sections)
+			sections = append(sections, chartSection{title: sectionTitle})
+			index = len(sections) - 1
+		}
+		sections[index].charts = append(sections[index].charts, chart)
+	}
+	return sections
+}
+
 func writeHTMLChartSection(writer io.Writer, title string, charts []svgChart) {
 	left, right := balanceCharts(charts)
-	fmt.Fprintf(writer, `<section><h2>%s</h2><div class="chart-grid">`, title)
+	fmt.Fprintf(writer, `<section><h2>%s</h2><div class="chart-grid">`, html.EscapeString(title))
 	writeHTMLChartColumn(writer, left)
 	writeHTMLChartColumn(writer, right)
 	fmt.Fprint(writer, "</div></section>")

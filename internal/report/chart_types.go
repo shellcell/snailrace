@@ -17,12 +17,14 @@ const svgChartStyle = `<style>` +
 	`.title{fill:#eceff4;font-size:13px;font-weight:700}` +
 	`.subtitle{fill:#d8dee9;font-size:10px}.label{fill:#e5e9f0;font-size:11px}` +
 	`.value{fill:#d8dee9;font-size:10px}.axis{stroke:#4c566a;stroke-width:1}` +
+	`.grid{stroke:#4c566a;stroke-width:1;opacity:.45}` +
 	`</style>`
 
 type svgChart struct {
 	kind        string
 	title       string
 	slug        string
+	subsection  string
 	description string
 	body        string
 	height      int

@@ -65,6 +65,25 @@ func TestBaselineChartsSeparateEveryMetric(t *testing.T) {
 	}
 }
 
+func TestBaselineChartShowsBaselineConfidenceWhisker(t *testing.T) {
+	report := model.Report{
+		Config: model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{
+			benchmarkWithWallTimes("baseline", 9, 10, 11),
+			benchmarkWithWallTimes("candidate", 8, 9, 10),
+		},
+	}
+	chart := deltaForestChart(report, chartGroup{
+		name: "Wall time", metrics: []chartMetric{chartMetricDefinitions()[0]},
+	})
+	if !strings.Contains(chart.body, `class="baseline-ci"`) {
+		t.Fatalf("baseline confidence whisker missing: %s", chart.body)
+	}
+	if !strings.Contains(chart.description, "baseline whisker") {
+		t.Fatalf("baseline whisker explanation missing: %s", chart.description)
+	}
+}
+
 func TestToolColorsAreDistinctAndStable(t *testing.T) {
 	seen := make(map[string]bool)
 	for index := 0; index < 10; index++ {
@@ -140,6 +159,18 @@ func TestFixedTUIRankingChartUsesCPUUnits(t *testing.T) {
 	}
 }
 
+func TestSingleToolReportOmitsRankingCharts(t *testing.T) {
+	report := model.Report{
+		Config:     model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{benchmarkWithTrendRuns("tool")},
+	}
+	for _, chart := range reportCharts(report) {
+		if chart.kind == "ranking" {
+			t.Fatalf("single-tool report should not include ranking chart %q", chart.title)
+		}
+	}
+}
+
 func TestBalancedIndexDescriptionListsIncludedCategories(t *testing.T) {
 	report := model.Report{
 		Config: model.Config{Mode: "command", Baseline: 1},
@@ -155,6 +186,104 @@ func TestBalancedIndexDescriptionListsIncludedCategories(t *testing.T) {
 	} {
 		if !strings.Contains(description, expected) {
 			t.Fatalf("balanced-index description missing %q: %s", expected, description)
+		}
+	}
+}
+
+func TestSingleToolReportHasMetricGroupTrendCharts(t *testing.T) {
+	report := model.Report{
+		Config:     model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{benchmarkWithTrendRuns("tool")},
+	}
+	var titles []string
+	var combined strings.Builder
+	for _, chart := range reportCharts(report) {
+		if chart.kind != "trend" {
+			continue
+		}
+		titles = append(titles, chart.title)
+		combined.WriteString(chart.body)
+		combined.WriteString(chart.description)
+	}
+	for _, expected := range []string{
+		"Performance trends", "CPU cost trends", "Memory cost trends",
+		"Process structure trends",
+		`class="trend-line"`, `class="grid"`, `text-anchor="end"`,
+		"CPU time (Total CPU, User CPU, System CPU); Average CPU (Average CPU)",
+		"Resident memory (OS-reported max RSS, Peak RSS, Mean RSS)",
+		"Processes and threads (Peak threads, Peak processes)",
+	} {
+		if !strings.Contains(strings.Join(titles, " ")+combined.String(), expected) {
+			t.Fatalf("single-tool trend charts missing %q: titles=%v", expected, titles)
+		}
+	}
+}
+
+func TestTrendChartsAreSectionedByTool(t *testing.T) {
+	report := model.Report{
+		Config: model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{
+			benchmarkWithTrendRuns("first"),
+			benchmarkWithTrendRuns("second"),
+		},
+	}
+	var titles []string
+	for _, section := range chartSections(reportCharts(report)) {
+		if strings.HasPrefix(section.title, "Measurement trends") {
+			titles = append(titles, section.title)
+		}
+	}
+	for _, expected := range []string{
+		"Measurement trends · first [BASELINE]",
+		"Measurement trends · second",
+	} {
+		if !containsString(titles, expected) {
+			t.Fatalf("trend section missing %q: %v", expected, titles)
+		}
+	}
+}
+
+func TestTrendLegendValuesDoNotOverlapLabels(t *testing.T) {
+	report := model.Report{
+		Config:     model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{benchmarkWithTrendRuns("tool")},
+	}
+	chart := measurementTrendChart(report, 0, chartGroup{
+		name: "MEMORY COST", metrics: chartMetricDefinitions()[5:9],
+	})
+	if strings.Contains(chart.body, `x="704"`) {
+		t.Fatalf("trend legend values should not use overlapping right column: %s", chart.body)
+	}
+	for _, expected := range []string{
+		`OS-reported max RSS`, `x="92"`, `x="520"`,
+		`x="92" y="88" class="label">Resident memory`,
+		`x="92" y="158" class="value">run 1`,
+		`x="500" y="158" text-anchor="end" class="value">run 3`,
+		`100 B ... 130 B`,
+	} {
+		if !strings.Contains(chart.body, expected) {
+			t.Fatalf("trend legend missing stacked value layout marker %q: %s", expected, chart.body)
+		}
+	}
+}
+
+func TestComparisonReportHasPerToolTrendCharts(t *testing.T) {
+	report := model.Report{
+		Config: model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{
+			benchmarkWithTrendRuns("first"),
+			benchmarkWithTrendRuns("second"),
+		},
+	}
+	titles := trendChartTitles(reportCharts(report))
+	for _, expected := range []string{
+		"CPU cost trends · first [BASELINE]",
+		"Memory cost trends · first [BASELINE]",
+		"CPU cost trends · second",
+		"Memory cost trends · second",
+	} {
+		if !containsString(titles, expected) {
+			t.Fatalf("comparison trend charts missing %q: %v", expected, titles)
 		}
 	}
 }
@@ -181,6 +310,52 @@ func TestChartsHaveExplicitDescriptions(t *testing.T) {
 				t.Fatalf("chart %q is missing a description", chart.title)
 			}
 		}
+	}
+}
+
+func trendChartTitles(charts []svgChart) []string {
+	titles := make([]string, 0)
+	for _, chart := range charts {
+		if chart.kind == "trend" {
+			titles = append(titles, chart.title)
+		}
+	}
+	return titles
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func benchmarkWithTrendRuns(name string) model.Benchmark {
+	runs := []model.Run{
+		trendRun(1, 1.00, 0.20, 0.10, 30, 100, 200, 210, 1000, 1, 2, 3),
+		trendRun(2, 1.10, 0.24, 0.11, 32, 130, 230, 240, 1100, 1, 3, 4),
+		trendRun(3, 0.95, 0.19, 0.09, 29, 120, 220, 230, 1050, 1, 2, 3),
+	}
+	return model.Benchmark{
+		Tool:    model.ToolInfo{Name: name, DiskFootprintBytes: 1000},
+		Runs:    runs,
+		Summary: model.Summarize(runs),
+	}
+}
+
+func trendRun(
+	index int,
+	wall, userCPU, systemCPU, averageCPU, meanRSS, peakRSS float64,
+	osMaxRSS, virtualMemory, processes, threads, fds float64,
+) model.Run {
+	return model.Run{
+		Index: index, WallSeconds: wall, CPUUserSeconds: userCPU,
+		CPUSystemSeconds: systemCPU, AverageCPUPercent: averageCPU,
+		MeanResidentBytes: meanRSS, PeakResidentBytes: peakRSS,
+		OSMaxRSSBytes: osMaxRSS, PeakVirtualBytes: virtualMemory,
+		PeakProcesses: processes, PeakThreads: threads, PeakFileDescriptors: fds,
 	}
 }
 

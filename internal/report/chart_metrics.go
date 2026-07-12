@@ -4,8 +4,9 @@ import "perftool/internal/model"
 
 func reportCharts(report model.Report) []svgChart {
 	groups := chartGroups(report)
-	charts := rankingCharts(report)
+	var charts []svgChart
 	if len(report.Benchmarks) > 1 {
+		charts = append(charts, rankingCharts(report)...)
 		for _, group := range groups {
 			for _, metric := range group.metrics {
 				chart := deltaForestChart(report, chartGroup{
@@ -33,9 +34,7 @@ func reportCharts(report model.Report) []svgChart {
 	); chart.height > 0 {
 		charts = append(charts, chart)
 	}
-	if chart := measurementTrendChart(report); chart.height > 0 {
-		charts = append(charts, chart)
-	}
+	charts = append(charts, measurementTrendCharts(report)...)
 	return charts
 }
 

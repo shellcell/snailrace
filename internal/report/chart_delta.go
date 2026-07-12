@@ -33,13 +33,20 @@ func deltaForestChart(report model.Report, group chartGroup) svgChart {
 			})
 			continue
 		}
-		baseMean := metric.stats(baseline).Mean
-		rows = append(rows, forestRow{
+		baseStats := metric.stats(baseline)
+		baseMean := baseStats.Mean
+		baselineRow := forestRow{
 			label:  metric.name + " · " + reportToolLabel(report, baselinePosition),
 			status: metric.format(baseMean) + " · baseline",
 			class:  "neutral", identity: toolColor(report, baselinePosition),
 			baseline: true,
-		})
+		}
+		if baseMean != 0 && baseStats.CI95Valid {
+			baselineRow.low, baselineRow.high = percentInterval(baseStats.CI95Low, baseStats.CI95High, baseMean)
+			baselineRow.interval = true
+			maximum = math.Max(maximum, math.Max(math.Abs(baselineRow.low), math.Abs(baselineRow.high)))
+		}
+		rows = append(rows, baselineRow)
 		if baseMean == 0 {
 			for index, candidate := range report.Benchmarks {
 				if index == baselinePosition {
@@ -102,7 +109,8 @@ func renderForest(
 		&body,
 		`<rect width="100%%" height="100%%" rx="8" fill="#3b4252"/>`+
 			`<text x="16" y="24" class="title">Δ FROM BASELINE · %s</text>`+
-			`<text x="16" y="43" class="subtitle">baseline: %s (Δ 0%%) · point = mean · whisker = paired 95%% CI</text>`+
+			`<text x="16" y="43" class="subtitle">baseline: %s (Δ 0%%) · `+
+			`candidate whisker = paired 95%% CI · baseline whisker = mean 95%% CI</text>`+
 			`<path d="M %.1f 54 V %d" stroke="#4c566a" stroke-dasharray="3 3"/>`+
 			`<text x="%d" y="62" class="value">-%g%%</text>`+
 			`<text x="%.1f" y="62" text-anchor="middle" class="value">0</text>`+
@@ -115,12 +123,22 @@ func renderForest(
 		y := 72 + index*rowHeight
 		color := statusColor(row.class)
 		if row.baseline {
+			whisker := ""
+			if row.interval {
+				whisker = fmt.Sprintf(
+					`<path class="baseline-ci" d="M %.1f %d H %.1f M %.1f %d v 10 M %.1f %d v 10" `+
+						`stroke="%s" stroke-width="2"/>`,
+					position(row.low), y-4, position(row.high), position(row.low), y-9,
+					position(row.high), y-9, color,
+				)
+			}
 			fmt.Fprintf(
 				&body,
 				`<text x="16" y="%d" class="label" style="fill:%s">%s</text>`+
+					`%s`+
 					`<path d="M %.1f %d l 6 6 -6 6 -6 -6 z" fill="%s"/>`+
 					`<text x="570" y="%d" fill="%s" font-size="11">%s</text>`,
-				y, row.identity, html.EscapeString(clip(row.label, 31)), position(0), y-10,
+				y, row.identity, html.EscapeString(clip(row.label, 31)), whisker, position(0), y-10,
 				color, y, color, html.EscapeString(row.status),
 			)
 			continue
@@ -157,10 +175,19 @@ func renderForest(
 	}
 }
 
+func percentInterval(low, high, center float64) (float64, float64) {
+	lowPercent := (low/center - 1) * 100
+	highPercent := (high/center - 1) * 100
+	if lowPercent > highPercent {
+		return highPercent, lowPercent
+	}
+	return lowPercent, highPercent
+}
+
 func baselineChartDescription(title, baseline string) string {
 	return "Shows each candidate's percent change in " + title + " relative to baseline " +
 		baseline + ". Math: percent delta = (candidate mean / baseline mean - 1) * 100. " +
-		"Whiskers are paired, pointwise 95% confidence intervals for run differences, " +
-		"scaled by the baseline mean when percent deltas are available. Left of zero " +
-		"means lower than baseline."
+		"Candidate whiskers are paired, pointwise 95% confidence intervals for run " +
+		"differences, scaled by the baseline mean. The baseline whisker is the baseline " +
+		"mean 95% confidence interval expressed relative to the baseline mean."
 }

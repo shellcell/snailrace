@@ -9,9 +9,10 @@ import (
 )
 
 type ChartArtifact struct {
-	Title    string
-	Section  string
-	Filename string
+	Title      string
+	Section    string
+	Subsection string
+	Filename   string
 }
 
 func WriteChartFiles(
@@ -34,7 +35,8 @@ func WriteChartFiles(
 			return nil, err
 		}
 		artifacts = append(artifacts, ChartArtifact{
-			Title: chart.title, Section: chart.kind, Filename: filename,
+			Title: chart.title, Section: chart.kind, Subsection: chart.subsection,
+			Filename: filename,
 		})
 	}
 	return artifacts, nil
