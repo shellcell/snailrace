@@ -4,7 +4,7 @@ import "testing"
 
 func TestBalancedScheduleCounterbalancesCompleteBlock(t *testing.T) {
 	const tools = 4
-	schedule := balancedSchedule(tools, tools, 42)
+	schedule := BalancedSchedule(tools, tools, 42)
 	for tool := 0; tool < tools; tool++ {
 		positions := make([]int, tools)
 		for _, round := range schedule {

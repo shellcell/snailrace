@@ -35,6 +35,36 @@ func TestComparisonChartsContainDeltaAndRunViews(t *testing.T) {
 	}
 }
 
+func TestBaselineChartsSeparateEveryMetric(t *testing.T) {
+	report := model.Report{
+		Config: model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{
+			benchmarkWithWallTimes("baseline", 1, 1),
+			benchmarkWithWallTimes("candidate", 2, 2),
+		},
+	}
+	var titles []string
+	for _, chart := range reportCharts(report) {
+		if chart.kind == "baseline" {
+			titles = append(titles, chart.title)
+		}
+	}
+	if len(titles) != len(chartMetricDefinitions()) {
+		t.Fatalf("baseline charts = %d, want %d: %v", len(titles), len(chartMetricDefinitions()), titles)
+	}
+	for _, expected := range []string{
+		"Mean RSS", "Peak RSS", "OS-reported max RSS", "Peak virtual memory",
+	} {
+		found := false
+		for _, title := range titles {
+			found = found || title == expected
+		}
+		if !found {
+			t.Fatalf("missing separate baseline chart %q: %v", expected, titles)
+		}
+	}
+}
+
 func TestToolColorsAreDistinctAndStable(t *testing.T) {
 	seen := make(map[string]bool)
 	for index := 0; index < 10; index++ {
@@ -79,6 +109,20 @@ func TestSingleRunDistributionOmitsUndefinedConfidenceWhisker(t *testing.T) {
 	chart := absoluteDistributionChart(report, chartMetricDefinitions()[0])
 	if strings.Contains(chart.body, `stroke="#eceff4"`) {
 		t.Fatal("one observation should not render a confidence whisker")
+	}
+}
+
+func TestDistributionSummaryPaintsAboveRawRuns(t *testing.T) {
+	report := model.Report{
+		Config:     model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{benchmarkWithWallTimes("tool", 1, 2)},
+	}
+	body := absoluteDistributionChart(report, chartMetricDefinitions()[0]).body
+	dot := strings.Index(body, `class="run-dot"`)
+	whisker := strings.Index(body, `class="mean-ci"`)
+	diamond := strings.Index(body, `class="mean-diamond"`)
+	if dot < 0 || whisker <= dot || diamond <= whisker {
+		t.Fatalf("SVG z-order should be run dots, then whisker, then diamond: %d/%d/%d", dot, whisker, diamond)
 	}
 }
 

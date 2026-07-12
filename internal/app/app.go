@@ -43,7 +43,8 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 	measuredAt := time.Now()
 	width, height := options.width, options.height
 	inheritedSize := options.tui && width == 0 && height == 0
-	followResize := inheritedSize && len(options.specs) == 1
+	interactiveTUI := options.tui && len(options.specs) == 1 && options.duration == 0
+	followResize := inheritedSize && interactiveTUI
 	if options.tui {
 		width, height = runner.ResolveTerminalSize(width, height)
 	}
@@ -61,19 +62,29 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 		OrderMethod:       "randomized counterbalanced cyclic blocks",
 		OutputMode:        outputMode(options),
 	}
+	measurementOrder := runner.BalancedSchedule(
+		len(options.specs), config.Runs, config.OrderSeed,
+	)
+	warmupOrder := runner.BalancedSchedule(
+		len(options.specs), config.Warmups, config.OrderSeed^0x5deece66d,
+	)
+	config.MeasurementOrder = oneBasedOrder(measurementOrder)
+	config.WarmupOrder = oneBasedOrder(warmupOrder)
 	benchmarks, err := runner.Benchmark(
 		ctx, options.specs, runner.Config{
 			Runs: config.Runs, Warmups: config.Warmups, Interval: config.Interval,
-			OrderSeed: config.OrderSeed,
+			OrderSeed:        config.OrderSeed,
+			MeasurementOrder: measurementOrder,
+			WarmupOrder:      warmupOrder,
 		}, runner.Options{
 			ShowOutput: options.showOutput, TUI: options.tui,
 			Output:   stderr,
 			Duration: options.duration, Width: width, Height: height,
-			Interactive:  options.tui && len(options.specs) == 1,
+			Interactive:  interactiveTUI,
 			FollowResize: followResize,
 			Progress: progressRenderer(
 				stderr,
-				!options.showOutput && !(options.tui && len(options.specs) == 1),
+				!options.showOutput && !interactiveTUI,
 			),
 		},
 	)
@@ -100,9 +111,20 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 	return checkExitCodes(benchmarks)
 }
 
+func oneBasedOrder(order [][]int) [][]int {
+	result := make([][]int, len(order))
+	for round, tools := range order {
+		result[round] = make([]int, len(tools))
+		for position, tool := range tools {
+			result[round][position] = tool + 1
+		}
+	}
+	return result
+}
+
 func outputMode(options options) string {
 	if options.tui {
-		if len(options.specs) == 1 {
+		if len(options.specs) == 1 && options.duration == 0 {
 			return "interactive PTY"
 		}
 		return "drained PTY"

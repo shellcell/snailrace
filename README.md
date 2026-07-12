@@ -29,6 +29,10 @@ counterbalanced execution blocks to reduce ordering bias:
 ./snailrace -n 20 -c 'grep needle data.txt' -c 'rg needle data.txt'
 ```
 
+JSON reports retain the exact warmup and measurement order as one-based tool
+indices. Complete blocks balance every tool across every execution position;
+the final partial block is randomized but cannot be fully balanced.
+
 Create a self-contained HTML report:
 
 ```sh
@@ -55,10 +59,10 @@ Compare TUIs for an equal fixed duration:
 ```
 
 Interactive TUI mode uses a real PTY, inherits the current terminal dimensions,
-and follows terminal resize events. Fixed-duration comparisons capture geometry
-once, reuse it for every run, and drain output without drawing it. `-width` and
-`-height` can override inherited dimensions when a comparison must be
-reproducible across different terminals or hosts.
+and follows terminal resize events. Every fixed-duration run is noninteractive:
+it captures geometry once, reuses it for every run, and drains output without
+drawing it. `-width` and `-height` can override inherited dimensions when a
+comparison must be reproducible across different terminals or hosts.
 
 Useful options:
 
@@ -122,6 +126,7 @@ unless every compared run spans two intervals and has two valid samples.
 Resource-cost better/worse labels assume every command performs equivalent work.
 Intervals are pointwise and unadjusted for multiple comparisons. Comparisons to
 an automatically selected baseline are exploratory post-selection inference.
+Statistical direction does not imply that an effect is practically important.
 
 The automatic baseline is the lowest balanced index. That index is an
 equal-weight geometric mean of normalized elapsed time, CPU cost, RAM cost, and
@@ -144,8 +149,9 @@ Nord-derived tool palette consistently in command legends, ranking bars,
 scatter legends, chart labels, and live progress. Colors remain stable by
 command order; baseline badges and references use Frost blue.
 
-Elapsed time uses Go's monotonic clock. CPU time and waited-process maximum RSS
-use the OS child resource record. Aggregate tree RSS is sampled separately and
+Elapsed time uses Go's monotonic clock. CPU time and OS-reported maximum RSS use
+the waited process's resource record. The OS value is a high-water mark, not an
+aggregate tree measurement. Aggregate tree RSS is sampled separately and
 can double-count shared pages. Other peaks are sampled, so a process that starts
 and exits within one sampling interval can be missed. Lower intervals improve
 temporal resolution but increase observer CPU use and perturb short benchmarks.
@@ -170,6 +176,8 @@ Tool metadata estimates the executable size and statically discoverable linked
 library and its size, and their deduplicated total footprint. Runtime-loaded
 plugins and executables launched later by children are not included in that
 static footprint and are identified as a limitation in reports.
+Commands that daemonize or escape their process group are unsupported because
+their resource use cannot be contained or attributed reliably.
 
 ## Architecture
 

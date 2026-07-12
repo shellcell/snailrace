@@ -59,7 +59,8 @@ func absoluteDistributionChart(report model.Report, metric chartMetric) svgChart
 		for runIndex, run := range benchmark.Runs {
 			jitter := (runIndex%3 - 1) * 5
 			fmt.Fprintf(
-				&body, `<circle cx="%.1f" cy="%d" r="3.5" fill="%s" opacity=".65"/>`,
+				&body, `<circle class="run-dot" cx="%.1f" cy="%d" `+
+					`r="3.5" fill="%s" opacity=".65"/>`,
 				position(metric.run(run)), y-4+jitter, color,
 			)
 		}
@@ -70,13 +71,17 @@ func absoluteDistributionChart(report model.Report, metric chartMetric) svgChart
 			fmt.Fprintf(
 				&body,
 				`<path d="M %.1f %d H %.1f M %.1f %d v 10 M %.1f %d v 10" `+
+					`stroke="#3b4252" stroke-width="5"/>`+
+					`<path class="mean-ci" d="M %.1f %d H %.1f M %.1f %d v 10 M %.1f %d v 10" `+
 					`stroke="#eceff4" stroke-width="1.5"/>`,
+				low, y-4, high, low, y-9, high, y-9,
 				low, y-4, high, low, y-9, high, y-9,
 			)
 		}
 		fmt.Fprintf(
 			&body,
-			`<path d="M %.1f %d l 6 6 -6 6 -6 -6 z" fill="%s"/>`+
+			`<path class="mean-diamond" d="M %.1f %d l 6 6 -6 6 -6 -6 z" `+
+				`fill="%s" stroke="#3b4252" stroke-width="2"/>`+
 				`<text x="620" y="%d" class="value">%s</text>`,
 			mean, y-10, color, y, metric.format(stats.Mean),
 		)

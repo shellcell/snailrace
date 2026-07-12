@@ -2,7 +2,7 @@ package runner
 
 import "math/rand"
 
-func balancedSchedule(tools, rounds int, seed int64) [][]int {
+func BalancedSchedule(tools, rounds int, seed int64) [][]int {
 	if tools <= 0 || rounds <= 0 {
 		return nil
 	}

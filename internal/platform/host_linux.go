@@ -92,3 +92,7 @@ func ResourceUsage(state *os.ProcessState) (float64, float64, uint64) {
 	}
 	return state.UserTime().Seconds(), state.SystemTime().Seconds(), maxRSS
 }
+
+func MaxRSSDescription() string {
+	return "OS max RSS uses wait4 ru_maxrss in KiB; it is a high-water mark, not aggregate tree RSS."
+}

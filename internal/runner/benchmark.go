@@ -26,9 +26,13 @@ func Benchmark(
 		benchmarks[index].Tool = tool
 		progress.setTool(index, tool)
 	}
-	for warmup, order := range balancedSchedule(
-		len(specs), config.Warmups, config.OrderSeed^0x5deece66d,
-	) {
+	warmupOrder := config.WarmupOrder
+	if len(warmupOrder) != config.Warmups {
+		warmupOrder = BalancedSchedule(
+			len(specs), config.Warmups, config.OrderSeed^0x5deece66d,
+		)
+	}
+	for warmup, order := range warmupOrder {
 		for _, index := range order {
 			spec := specs[index]
 			progress.update(
@@ -45,9 +49,11 @@ func Benchmark(
 		}
 	}
 
-	for runIndex, order := range balancedSchedule(
-		len(specs), config.Runs, config.OrderSeed,
-	) {
+	measurementOrder := config.MeasurementOrder
+	if len(measurementOrder) != config.Runs {
+		measurementOrder = BalancedSchedule(len(specs), config.Runs, config.OrderSeed)
+	}
+	for runIndex, order := range measurementOrder {
 		for _, index := range order {
 			progress.update(
 				index, specs[index].Name, runIndex+1, config.Runs,
@@ -66,6 +72,9 @@ func Benchmark(
 		}
 	}
 	for index := range benchmarks {
+		if err := inspector.addHash(&benchmarks[index].Tool); err != nil {
+			return nil, fmt.Errorf("hash %q: %w", benchmarks[index].Tool.Name, err)
+		}
 		benchmarks[index].Summary = model.Summarize(benchmarks[index].Runs)
 	}
 	return benchmarks, nil

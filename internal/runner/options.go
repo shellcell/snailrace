@@ -8,9 +8,11 @@ import (
 )
 
 type Config struct {
-	Runs, Warmups int
-	Interval      time.Duration
-	OrderSeed     int64
+	Runs, Warmups    int
+	Interval         time.Duration
+	OrderSeed        int64
+	MeasurementOrder [][]int
+	WarmupOrder      [][]int
 }
 
 type Options struct {

@@ -16,6 +16,8 @@ type Config struct {
 	BaselineAutomatic bool          `json:"baseline_automatic"`
 	OrderSeed         int64         `json:"order_seed"`
 	OrderMethod       string        `json:"order_method"`
+	MeasurementOrder  [][]int       `json:"measurement_order"`
+	WarmupOrder       [][]int       `json:"warmup_order,omitempty"`
 	OutputMode        string        `json:"output_mode"`
 }
 
@@ -56,7 +58,7 @@ type Run struct {
 	CPUSystemSeconds      float64 `json:"cpu_system_seconds"`
 	AverageCPUPercent     float64 `json:"average_cpu_percent"`
 	PeakResidentBytes     float64 `json:"peak_resident_bytes"`
-	WaitedMaxRSSBytes     float64 `json:"waited_process_max_rss_bytes"`
+	OSMaxRSSBytes         float64 `json:"os_max_rss_bytes"`
 	MeanResidentBytes     float64 `json:"mean_resident_bytes"`
 	PeakVirtualBytes      float64 `json:"peak_virtual_bytes"`
 	PeakProcesses         float64 `json:"peak_processes"`
@@ -87,7 +89,7 @@ type Summary struct {
 	CPUSystemSeconds      Stats `json:"cpu_system_seconds"`
 	AverageCPUPercent     Stats `json:"average_cpu_percent"`
 	PeakResidentBytes     Stats `json:"peak_resident_bytes"`
-	WaitedMaxRSSBytes     Stats `json:"waited_process_max_rss_bytes"`
+	OSMaxRSSBytes         Stats `json:"os_max_rss_bytes"`
 	MeanResidentBytes     Stats `json:"mean_resident_bytes"`
 	PeakVirtualBytes      Stats `json:"peak_virtual_bytes"`
 	PeakProcesses         Stats `json:"peak_processes"`

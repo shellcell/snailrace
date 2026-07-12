@@ -30,8 +30,8 @@ func Summarize(runs []Run) Summary {
 		PeakResidentBytes: stats(values(func(r Run) float64 {
 			return r.PeakResidentBytes
 		})),
-		WaitedMaxRSSBytes: stats(values(func(r Run) float64 {
-			return r.WaitedMaxRSSBytes
+		OSMaxRSSBytes: stats(values(func(r Run) float64 {
+			return r.OSMaxRSSBytes
 		})),
 		MeanResidentBytes: stats(values(func(r Run) float64 {
 			return r.MeanResidentBytes

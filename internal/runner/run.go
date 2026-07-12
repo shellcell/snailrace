@@ -57,7 +57,7 @@ func runOnce(
 		CPUUserSeconds: user, CPUSystemSeconds: system,
 		AverageCPUPercent:     averageCPUPercent(user, system, elapsed),
 		PeakResidentBytes:     float64(peak.ResidentBytes),
-		WaitedMaxRSSBytes:     float64(rusageRSS),
+		OSMaxRSSBytes:         float64(rusageRSS),
 		MeanResidentBytes:     meanResident,
 		PeakVirtualBytes:      float64(peak.VirtualBytes),
 		PeakProcesses:         float64(peak.Processes),

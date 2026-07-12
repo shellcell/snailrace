@@ -15,11 +15,14 @@ import (
 )
 
 type toolInspector struct {
-	cache map[string]model.ToolInfo
+	cache     map[string]model.ToolInfo
+	hashCache map[string]string
 }
 
 func newToolInspector() *toolInspector {
-	return &toolInspector{cache: make(map[string]model.ToolInfo)}
+	return &toolInspector{
+		cache: make(map[string]model.ToolInfo), hashCache: make(map[string]string),
+	}
 }
 
 func inspectTool(spec Spec) (model.ToolInfo, error) {
@@ -56,16 +59,6 @@ func (inspector *toolInspector) inspect(spec Spec) (model.ToolInfo, error) {
 		)
 	}
 	tool.SizeBytes = info.Size()
-	file, err := os.Open(executable)
-	if err != nil {
-		return model.ToolInfo{}, err
-	}
-	defer file.Close()
-	hash := sha256.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return model.ToolInfo{}, err
-	}
-	tool.SHA256 = hex.EncodeToString(hash.Sum(nil))
 	for _, path := range platform.LinkedFiles(executable) {
 		info, err := os.Stat(path)
 		if err != nil {
@@ -79,6 +72,25 @@ func (inspector *toolInspector) inspect(spec Spec) (model.ToolInfo, error) {
 	tool.DiskFootprintBytes = tool.SizeBytes + tool.LinkedSizeBytes
 	inspector.cache[executable] = tool
 	return tool, nil
+}
+
+func (inspector *toolInspector) addHash(tool *model.ToolInfo) error {
+	if hash, ok := inspector.hashCache[tool.Executable]; ok {
+		tool.SHA256 = hash
+		return nil
+	}
+	file, err := os.Open(tool.Executable)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return err
+	}
+	tool.SHA256 = hex.EncodeToString(hash.Sum(nil))
+	inspector.hashCache[tool.Executable] = tool.SHA256
+	return nil
 }
 
 func shellExecutable(command string) string {

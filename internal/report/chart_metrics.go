@@ -7,9 +7,13 @@ func reportCharts(report model.Report) []svgChart {
 	charts := rankingCharts(report)
 	if len(report.Benchmarks) > 1 {
 		for _, group := range groups {
-			chart := deltaForestChart(report, group)
-			if chart.height > 0 {
-				charts = append(charts, chart)
+			for _, metric := range group.metrics {
+				chart := deltaForestChart(report, chartGroup{
+					name: metric.name, metrics: []chartMetric{metric},
+				})
+				if chart.height > 0 {
+					charts = append(charts, chart)
+				}
 			}
 		}
 		charts = append(charts, tradeoffCharts(report)...)
@@ -72,9 +76,9 @@ func chartMetricDefinitions() []chartMetric {
 		{"Peak RSS", formatBytes,
 			func(b model.Benchmark) model.Stats { return b.Summary.PeakResidentBytes },
 			func(r model.Run) float64 { return r.PeakResidentBytes }, 6},
-		{"Waited process max RSS", formatBytes,
-			func(b model.Benchmark) model.Stats { return b.Summary.WaitedMaxRSSBytes },
-			func(r model.Run) float64 { return r.WaitedMaxRSSBytes }, 7},
+		{"OS-reported max RSS", formatBytes,
+			func(b model.Benchmark) model.Stats { return b.Summary.OSMaxRSSBytes },
+			func(r model.Run) float64 { return r.OSMaxRSSBytes }, 7},
 		{"Peak virtual memory", formatBytes,
 			func(b model.Benchmark) model.Stats { return b.Summary.PeakVirtualBytes },
 			func(r model.Run) float64 { return r.PeakVirtualBytes }, 8},
