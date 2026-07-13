@@ -59,13 +59,17 @@ func (inspector *toolInspector) inspect(spec Spec) (model.ToolInfo, error) {
 		)
 	}
 	tool.SizeBytes = info.Size()
-	for _, path := range platform.LinkedFiles(executable) {
-		info, err := os.Stat(path)
+	for _, dependency := range platform.LinkedFiles(executable) {
+		if dependency.SharedCache {
+			tool.SharedCacheFiles = append(tool.SharedCacheFiles, dependency.Path)
+			continue
+		}
+		info, err := os.Stat(dependency.Path)
 		if err != nil {
 			continue
 		}
 		tool.LinkedFiles = append(tool.LinkedFiles, model.DiskFile{
-			Path: path, SizeBytes: info.Size(),
+			Path: dependency.Path, SizeBytes: info.Size(),
 		})
 		tool.LinkedSizeBytes += info.Size()
 	}

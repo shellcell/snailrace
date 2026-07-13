@@ -1,0 +1,27 @@
+#compdef snailrace
+
+_snailrace() {
+  _arguments -s -S \
+    '*-c[add shell command]:shell command:' \
+    '*-command[add shell command]:shell command:' \
+    '*-label[set command label]:label:' \
+    '-prepare[run one-time setup command]:command:' \
+    '(-n -runs)'{-n,-runs}'[set measured runs]:runs:' \
+    '-warmups[set warmup runs]:warmups:' \
+    '-interval[set sampling interval]:duration:' \
+    '*-index[set index dimensions]:dimension:(time cpu ram disk)' \
+    '-baseline[set 1-based baseline]:index:' \
+    '*'{-f,-format}'[select report format]:format:(html svg markdown json text)' \
+    '(-o -output)'{-o,-output}'[set report directory]:directory:_directories' \
+    '-verbose[print full statistical tables]' \
+    '-show-output[forward command output]' \
+    '(-d -duration)'{-d,-duration}'[set fixed TUI duration]:duration:' \
+    '-width[set TUI columns]:columns:' \
+    '-height[set TUI rows]:rows:' \
+    '(-v -version)'{-v,-version}'[print version]' \
+    '(-h -help)'{-h,-help}'[show help]' \
+    '1:mode or command:_alternative "mode:mode:(tui)" "command:command:_command_names"' \
+    '*::arguments:_normal'
+}
+
+_snailrace "$@"

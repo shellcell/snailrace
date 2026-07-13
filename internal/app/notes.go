@@ -34,7 +34,8 @@ func platformNotes(
 		notes = append(
 			notes,
 			"File descriptor metrics are unavailable on macOS.",
-			"macOS process sampling invokes ps after the first interval.",
+			"Physical footprint is the sampled sum charged to the process group.",
+			"Dyld shared-cache libraries have no standalone size and are excluded from disk footprint.",
 		)
 	}
 	if tui && duration > 0 {

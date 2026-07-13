@@ -47,3 +47,12 @@ func TestMeanResidentUsesObservedTimeWeights(t *testing.T) {
 		t.Fatalf("weighted mean RSS = %g, want 150", got)
 	}
 }
+
+func TestUpdatePeaksTracksPhysicalFootprint(t *testing.T) {
+	peak := platform.Metrics{PhysicalFootprintBytes: 100}
+	updatePeaks(&peak, platform.Metrics{PhysicalFootprintBytes: 250})
+	updatePeaks(&peak, platform.Metrics{PhysicalFootprintBytes: 200})
+	if peak.PhysicalFootprintBytes != 250 {
+		t.Fatalf("peak physical footprint = %d, want 250", peak.PhysicalFootprintBytes)
+	}
+}

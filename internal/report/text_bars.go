@@ -53,6 +53,13 @@ func compactMetrics(report model.Report, ranking rankingData) []compactMetric {
 		}
 		ramNote += ")"
 	}
+	diskNote := ""
+	for _, benchmark := range report.Benchmarks {
+		if len(benchmark.Tool.SharedCacheFiles) > 0 {
+			diskNote = "  (dyld shared cache excluded)"
+			break
+		}
+	}
 	return []compactMetric{
 		{
 			name: ranking.primaryLabel, unit: ranking.primaryUnit,
@@ -72,7 +79,14 @@ func compactMetrics(report model.Report, ranking rankingData) []compactMetric {
 			stdDev: func(s model.Summary) float64 { return s.MeanResidentBytes.StdDev },
 		},
 		{
-			name: "DISK", unit: formatBytes, available: ranking.footprintRatio,
+			name: "PHYS", unit: formatBytes, available: report.Host.OS == "darwin",
+			value: func(r rankingRow) float64 {
+				return report.Benchmarks[r.benchmark].Summary.PhysicalFootprintStats().Mean
+			},
+			stdDev: func(s model.Summary) float64 { return s.PhysicalFootprintStats().StdDev },
+		},
+		{
+			name: "DISK", note: diskNote, unit: formatBytes, available: ranking.footprintRatio,
 			value: func(r rankingRow) float64 { return r.footprintValue },
 		},
 	}

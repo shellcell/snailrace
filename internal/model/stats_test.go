@@ -42,6 +42,17 @@ func TestSingleObservationHasNoConfidenceInterval(t *testing.T) {
 	}
 }
 
+func TestUnavailablePhysicalFootprintIsOmittedFromJSON(t *testing.T) {
+	summary := Summarize([]Run{{WallSeconds: 1}})
+	encoded, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "peak_physical_footprint_bytes") {
+		t.Fatalf("unavailable physical footprint should be omitted: %s", encoded)
+	}
+}
+
 func assertClose(t *testing.T, got, want float64) {
 	t.Helper()
 	if math.Abs(got-want) > 1e-9 {

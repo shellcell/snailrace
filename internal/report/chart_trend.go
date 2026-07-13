@@ -182,13 +182,14 @@ func trendLanes(report model.Report, group chartGroup) []trendLane {
 		return trendLaneDefinitions(
 			byRow,
 			trendLaneSpec{"Resident memory", []int{7, 6, 5}},
-			trendLaneSpec{"Virtual memory", []int{8}},
+			trendLaneSpec{"Physical footprint", []int{8}},
+			trendLaneSpec{"Virtual memory", []int{9}},
 		)
 	case "PROCESS STRUCTURE":
 		return trendLaneDefinitions(
 			byRow,
-			trendLaneSpec{"Processes and threads", []int{10, 9}},
-			trendLaneSpec{"FD references", []int{11}},
+			trendLaneSpec{"Processes and threads", []int{11, 10}},
+			trendLaneSpec{"FD references", []int{12}},
 		)
 	default:
 		lanes := make([]trendLane, 0, len(metrics))
