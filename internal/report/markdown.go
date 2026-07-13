@@ -73,7 +73,8 @@ func writeMarkdownBenchmark(
 	fmt.Fprintf(
 		writer,
 		"### %s\n\nCommand:\n\n```sh\n%s\n```\n\nExecutable SHA-256: `%s`  \n"+
-			"Disk footprint: %s executable + %s linked = %s (%d libraries)\n\n",
+			"Disk footprint: %s executable + %s linked = %s "+
+			"(%d files; %d dyld-cache dependencies excluded)\n\n",
 		escapeMarkdown(label),
 		strings.Join(benchmark.Tool.Command, " "),
 		benchmark.Tool.SHA256,
@@ -81,6 +82,7 @@ func writeMarkdownBenchmark(
 		formatBytes(float64(benchmark.Tool.LinkedSizeBytes)),
 		formatBytes(float64(benchmark.Tool.DiskFootprintBytes)),
 		len(benchmark.Tool.LinkedFiles),
+		len(benchmark.Tool.SharedCacheFiles),
 	)
 	fmt.Fprintf(
 		writer, "Sampling observations: %s valid, %s mean observed coverage.  \n\n",

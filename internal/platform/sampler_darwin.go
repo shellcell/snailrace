@@ -1,77 +1,72 @@
 package platform
 
+/*
+#include <libproc.h>
+#include <sys/proc_info.h>
+#include <sys/resource.h>
+
+static int sample_process(pid_t pid, struct proc_taskinfo *task,
+                          struct rusage_info_v4 *usage) {
+	int size = proc_pidinfo(pid, PROC_PIDTASKINFO, 0, task, sizeof(*task));
+	if (size != sizeof(*task)) {
+		return 0;
+	}
+	if (proc_pid_rusage(pid, RUSAGE_INFO_V4, (rusage_info_t *)usage) != 0) {
+		usage->ri_phys_footprint = 0;
+	}
+	return 1;
+}
+*/
+import "C"
+
 import (
-	"bufio"
-	"bytes"
-	"os/exec"
-	"strconv"
-	"strings"
 	"time"
+	"unsafe"
 )
 
-func DefaultInterval() time.Duration { return 50 * time.Millisecond }
+func DefaultInterval() time.Duration { return 10 * time.Millisecond }
 
-func SampleImmediately() bool { return false }
+func SampleImmediately() bool { return true }
 
 func SampleTree(rootPID int) (Metrics, bool) {
-	output, err := exec.Command(
-		"/bin/ps", "-axo", "pid=,ppid=,rss=,vsz=,thcount=",
-	).Output()
-	if err != nil {
-		return Metrics{}, false
-	}
-	records := parseProcesses(output)
-	children := make(map[int][]int, len(records))
-	for pid, record := range records {
-		children[record.PPID] = append(children[record.PPID], pid)
-	}
+	pids := processGroupPIDs(rootPID)
 	var total Metrics
 	foundRoot := false
-	seen := make(map[int]bool)
-	queue := []int{rootPID}
-	for len(queue) > 0 {
-		pid := queue[0]
-		queue = queue[1:]
-		if seen[pid] {
+	for _, pid := range pids {
+		if pid <= 0 {
 			continue
 		}
-		seen[pid] = true
-		record, ok := records[pid]
-		if !ok {
+		var task C.struct_proc_taskinfo
+		var usage C.struct_rusage_info_v4
+		if C.sample_process(pid, &task, &usage) == 0 {
 			continue
 		}
-		if pid == rootPID {
+		if int(pid) == rootPID {
 			foundRoot = true
 		}
-		total.ResidentBytes += record.ResidentBytes
-		total.VirtualBytes += record.VirtualBytes
+		total.ResidentBytes += uint64(task.pti_resident_size)
+		total.PhysicalFootprintBytes += uint64(usage.ri_phys_footprint)
+		total.VirtualBytes += uint64(task.pti_virtual_size)
 		total.Processes++
-		total.Threads += record.Threads
-		queue = append(queue, children[pid]...)
+		total.Threads += uint64(task.pti_threadnum)
 	}
 	return total, foundRoot
 }
 
-func parseProcesses(output []byte) map[int]Process {
-	records := make(map[int]Process)
-	scanner := bufio.NewScanner(bytes.NewReader(output))
-	for scanner.Scan() {
-		fields := strings.Fields(scanner.Text())
-		if len(fields) != 5 {
-			continue
-		}
-		pid, err := strconv.Atoi(fields[0])
-		if err != nil {
-			continue
-		}
-		ppid, _ := strconv.Atoi(fields[1])
-		rss, _ := strconv.ParseUint(fields[2], 10, 64)
-		vsz, _ := strconv.ParseUint(fields[3], 10, 64)
-		threads, _ := strconv.ParseUint(fields[4], 10, 64)
-		records[pid] = Process{
-			PID: pid, PPID: ppid, ResidentBytes: rss * 1024,
-			VirtualBytes: vsz * 1024, Threads: threads,
-		}
+func processGroupPIDs(groupID int) []C.pid_t {
+	bytes := C.proc_listpgrppids(C.pid_t(groupID), nil, 0)
+	if bytes <= 0 {
+		return nil
 	}
-	return records
+	// Leave room for processes created between the sizing and data calls.
+	count := int(bytes) + 16
+	pids := make([]C.pid_t, count)
+	count = int(C.proc_listpgrppids(
+		C.pid_t(groupID), unsafe.Pointer(&pids[0]), C.int(len(pids))*C.sizeof_pid_t,
+	))
+	if count <= 0 {
+		return nil
+	}
+	count = min(count, len(pids))
+	return pids[:count]
 }

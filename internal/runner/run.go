@@ -55,17 +55,18 @@ func runOnce(
 	return model.Run{
 		ExitCode: cmd.ProcessState.ExitCode(), WallSeconds: elapsed.Seconds(),
 		CPUUserSeconds: user, CPUSystemSeconds: system,
-		AverageCPUPercent:     averageCPUPercent(user, system, elapsed),
-		PeakResidentBytes:     float64(peak.ResidentBytes),
-		OSMaxRSSBytes:         float64(rusageRSS),
-		MeanResidentBytes:     meanResident,
-		PeakVirtualBytes:      float64(peak.VirtualBytes),
-		PeakProcesses:         float64(peak.Processes),
-		PeakThreads:           float64(peak.Threads),
-		PeakFileDescriptors:   float64(peak.FileDescriptors),
-		StopReason:            "exited",
-		SampleCount:           int(peak.SampleCount),
-		SampleCoverageSeconds: peak.SampleCoverageSeconds,
+		AverageCPUPercent:          averageCPUPercent(user, system, elapsed),
+		PeakResidentBytes:          float64(peak.ResidentBytes),
+		PeakPhysicalFootprintBytes: float64(peak.PhysicalFootprintBytes),
+		OSMaxRSSBytes:              float64(rusageRSS),
+		MeanResidentBytes:          meanResident,
+		PeakVirtualBytes:           float64(peak.VirtualBytes),
+		PeakProcesses:              float64(peak.Processes),
+		PeakThreads:                float64(peak.Threads),
+		PeakFileDescriptors:        float64(peak.FileDescriptors),
+		StopReason:                 "exited",
+		SampleCount:                int(peak.SampleCount),
+		SampleCoverageSeconds:      peak.SampleCoverageSeconds,
 	}, nil
 }
 
@@ -115,6 +116,9 @@ func updatePeaks(peak *platform.Metrics, current platform.Metrics) {
 	peak.ResidentByteSamples += current.ResidentBytes
 	peak.SampleCount++
 	peak.ResidentBytes = max(peak.ResidentBytes, current.ResidentBytes)
+	peak.PhysicalFootprintBytes = max(
+		peak.PhysicalFootprintBytes, current.PhysicalFootprintBytes,
+	)
 	peak.VirtualBytes = max(peak.VirtualBytes, current.VirtualBytes)
 	peak.Processes = max(peak.Processes, current.Processes)
 	peak.Threads = max(peak.Threads, current.Threads)

@@ -19,7 +19,7 @@ import (
 	"perftool/internal/runner"
 )
 
-const Version = "0.0.1"
+const Version = "0.0.2"
 
 func Run(arguments []string, stdout, stderr io.Writer) error {
 	options, err := parseOptions(arguments, stderr)

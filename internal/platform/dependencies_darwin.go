@@ -1,52 +1,122 @@
 package platform
 
 import (
+	"bufio"
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
 
-func LinkedFiles(executable string) []string {
-	queue := []string{executable}
+func LinkedFiles(executable string) []LinkedDependency {
+	type queuedLibrary struct {
+		path   string
+		rpaths []string
+	}
+	executableRPaths := loadRPaths(executable, executable, executable)
+	queue := []queuedLibrary{{path: executable, rpaths: executableRPaths}}
 	seen := map[string]bool{executable: true}
-	var result []string
+	var result []LinkedDependency
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
-		output, err := exec.Command("otool", "-L", current).Output()
+		output, err := exec.Command("/usr/bin/otool", "-L", current.path).Output()
 		if err != nil {
 			continue
 		}
-		for _, dependency := range parseOtool(output, executable, current) {
-			resolved, err := filepath.EvalSymlinks(dependency)
-			if err != nil || seen[resolved] {
+		rpaths := append(loadRPaths(current.path, executable, current.path), current.rpaths...)
+		for _, name := range parseOtool(output) {
+			dependency, ok := resolveDylib(name, executable, current.path, rpaths)
+			if !ok || seen[dependency.Path] {
 				continue
 			}
-			if info, err := os.Stat(resolved); err == nil && info.Mode().IsRegular() {
-				seen[resolved] = true
-				result = append(result, resolved)
-				queue = append(queue, resolved)
+			seen[dependency.Path] = true
+			result = append(result, dependency)
+			if !dependency.SharedCache {
+				queue = append(queue, queuedLibrary{path: dependency.Path, rpaths: rpaths})
 			}
 		}
 	}
 	return result
 }
 
-func parseOtool(output []byte, executable, loader string) []string {
+func parseOtool(output []byte) []string {
 	lines := strings.Split(string(output), "\n")
 	result := make([]string, 0, len(lines))
 	for _, line := range lines[1:] {
 		fields := strings.Fields(line)
-		if len(fields) == 0 {
-			continue
-		}
-		path := fields[0]
-		path = strings.Replace(path, "@executable_path", filepath.Dir(executable), 1)
-		path = strings.Replace(path, "@loader_path", filepath.Dir(loader), 1)
-		if filepath.IsAbs(path) {
-			result = append(result, path)
+		if len(fields) > 0 {
+			result = append(result, fields[0])
 		}
 	}
 	return result
+}
+
+func loadRPaths(path, executable, loader string) []string {
+	output, err := exec.Command("/usr/bin/otool", "-l", path).Output()
+	if err != nil {
+		return nil
+	}
+	var result []string
+	wantPath := false
+	scanner := bufio.NewScanner(bytes.NewReader(output))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "cmd LC_RPATH" {
+			wantPath = true
+			continue
+		}
+		if !wantPath || !strings.HasPrefix(line, "path ") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) >= 2 {
+			result = append(result, expandDylibPath(fields[1], executable, loader))
+		}
+		wantPath = false
+	}
+	return result
+}
+
+func resolveDylib(name, executable, loader string, rpaths []string) (LinkedDependency, bool) {
+	var candidates []string
+	if suffix, found := strings.CutPrefix(name, "@rpath/"); found {
+		for _, rpath := range rpaths {
+			candidates = append(candidates, filepath.Join(rpath, suffix))
+		}
+	} else {
+		candidates = append(candidates, expandDylibPath(name, executable, loader))
+	}
+	sharedCacheCandidate := ""
+	for _, candidate := range candidates {
+		resolved, err := filepath.EvalSymlinks(candidate)
+		if err != nil {
+			resolved = candidate
+		}
+		if info, err := os.Stat(resolved); err == nil && info.Mode().IsRegular() {
+			return LinkedDependency{Path: resolved}, true
+		}
+		if sharedCacheCandidate == "" && isSharedCachePath(resolved) {
+			sharedCacheCandidate = resolved
+		}
+	}
+	if sharedCacheCandidate != "" && inSharedCache(sharedCacheCandidate) {
+		return LinkedDependency{Path: sharedCacheCandidate, SharedCache: true}, true
+	}
+	return LinkedDependency{}, false
+}
+
+func expandDylibPath(path, executable, loader string) string {
+	path = strings.Replace(path, "@executable_path", filepath.Dir(executable), 1)
+	return strings.Replace(path, "@loader_path", filepath.Dir(loader), 1)
+}
+
+func isSharedCachePath(path string) bool {
+	return strings.HasPrefix(path, "/usr/lib/") ||
+		strings.HasPrefix(path, "/System/Library/")
+}
+
+func inSharedCache(path string) bool {
+	return exec.Command("/usr/bin/dyld_info", "-dependents", path).Run() == nil
 }

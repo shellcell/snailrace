@@ -213,11 +213,13 @@ func writeHTMLBenchmark(
 	)
 	fmt.Fprintf(
 		writer,
-		`<p class="muted">%s executable + %s linked = %s footprint (%d libraries)</p>`,
+		`<p class="muted">%s executable + %s linked = %s footprint `+
+			`(%d files; %d dyld-cache dependencies excluded)</p>`,
 		formatBytes(float64(benchmark.Tool.SizeBytes)),
 		formatBytes(float64(benchmark.Tool.LinkedSizeBytes)),
 		formatBytes(float64(benchmark.Tool.DiskFootprintBytes)),
 		len(benchmark.Tool.LinkedFiles),
+		len(benchmark.Tool.SharedCacheFiles),
 	)
 	fmt.Fprintf(
 		writer,
