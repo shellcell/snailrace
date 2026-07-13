@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func LinkedFiles(executable string) []string {
+func LinkedFiles(executable string) []LinkedDependency {
 	output, _ := exec.Command("ldd", executable).CombinedOutput()
 	files := parseLDD(output)
 	if len(files) == 0 {
@@ -17,7 +17,12 @@ func LinkedFiles(executable string) []string {
 			files = append(files, parseLDD(output)...)
 		}
 	}
-	return uniqueFiles(files, executable)
+	paths := uniqueFiles(files, executable)
+	result := make([]LinkedDependency, len(paths))
+	for index, path := range paths {
+		result[index] = LinkedDependency{Path: path}
+	}
+	return result
 }
 
 func parseLDD(output []byte) []string {

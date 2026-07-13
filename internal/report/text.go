@@ -107,11 +107,12 @@ func writeTextBenchmark(
 		fmt.Fprintf(w, "%s\t%s\n", field, line)
 	}
 	fmt.Fprintf(
-		w, "Disk footprint\t%s executable + %s linked = %s (%d libraries)\n",
+		w, "Disk footprint\t%s executable + %s linked = %s (%d files; %d dyld-cache dependencies excluded)\n",
 		formatBytes(float64(benchmark.Tool.SizeBytes)),
 		formatBytes(float64(benchmark.Tool.LinkedSizeBytes)),
 		formatBytes(float64(benchmark.Tool.DiskFootprintBytes)),
 		len(benchmark.Tool.LinkedFiles),
+		len(benchmark.Tool.SharedCacheFiles),
 	)
 	fmt.Fprintf(
 		w, "Sampling observations\t%s valid, %s mean observed coverage\n",

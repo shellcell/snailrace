@@ -13,6 +13,15 @@ func Summarize(runs []Run) Summary {
 		}
 		return result
 	}
+	physicalValues := values(func(r Run) float64 { return r.PeakPhysicalFootprintBytes })
+	var physicalStats *Stats
+	for _, value := range physicalValues {
+		if value > 0 {
+			value := stats(physicalValues)
+			physicalStats = &value
+			break
+		}
+	}
 	return Summary{
 		WallSeconds: stats(values(func(r Run) float64 { return r.WallSeconds })),
 		CPUTotalSeconds: stats(values(func(r Run) float64 {
@@ -30,6 +39,7 @@ func Summarize(runs []Run) Summary {
 		PeakResidentBytes: stats(values(func(r Run) float64 {
 			return r.PeakResidentBytes
 		})),
+		PeakPhysicalFootprintBytes: physicalStats,
 		OSMaxRSSBytes: stats(values(func(r Run) float64 {
 			return r.OSMaxRSSBytes
 		})),
