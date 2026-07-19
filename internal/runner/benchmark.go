@@ -19,6 +19,9 @@ func Benchmark(
 	config Config,
 	options Options,
 ) ([]model.Benchmark, error) {
+	if err := validateBenchmarkInputs(ctx, specs, config); err != nil {
+		return nil, err
+	}
 	benchmarks := make([]model.Benchmark, len(specs))
 	progress := newProgressTracker(options, specs, config)
 	defer progress.finish()

@@ -10,6 +10,10 @@ import (
 
 func writeTextRanking(writer io.Writer, report model.Report) {
 	ranking := calculateRanking(report)
+	if len(ranking.rows) == 0 {
+		fmt.Fprintf(writer, "Ranking unavailable\t%s\n\n", ranking.unavailableReason)
+		return
+	}
 	fmt.Fprintln(writer, "Category leaders (point estimates)\tTool\tValue")
 	for _, winner := range ranking.winners {
 		fmt.Fprintf(
@@ -22,6 +26,10 @@ func writeTextRanking(writer io.Writer, report model.Report) {
 		writer, "Comparison baseline\t%s\n\n",
 		report.Benchmarks[baselineIndex(report)].Tool.Name,
 	)
+	if !ranking.available {
+		fmt.Fprintf(writer, "Overall ranking unavailable\t%s\n\n", ranking.unavailableReason)
+		return
+	}
 	fmt.Fprintf(
 		writer,
 		"Overall ranking (point estimates)\tTool\tBalanced\t%s\tCPU cost\tRAM aggregate\tLinked size\n",

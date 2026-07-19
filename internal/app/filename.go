@@ -10,6 +10,10 @@ import (
 )
 
 func reportPath(directory, format string, report model.Report) string {
+	return reportPathWithStem(directory, format, reportStem(report))
+}
+
+func reportPathWithStem(directory, format, stem string) string {
 	extension := strings.ToLower(format)
 	switch extension {
 	case "text":
@@ -17,7 +21,7 @@ func reportPath(directory, format string, report model.Report) string {
 	case "markdown":
 		extension = "md"
 	}
-	return filepath.Join(directory, reportStem(report)+"."+extension)
+	return filepath.Join(directory, stem+"."+extension)
 }
 
 func reportStem(report model.Report) string {

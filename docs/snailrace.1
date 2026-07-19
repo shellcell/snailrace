@@ -29,6 +29,11 @@ Commands are given either after a
 separator or with repeated
 .Fl c
 flags.
+.Pp
+Commands with non-zero measured exits continue through all configured rounds,
+but are reported as failures and excluded from rankings.
+If none of the selected dimensions is usable, the balanced ranking is marked
+unavailable instead of selecting a winner.
 The
 .Cm tui
 subcommand renders a live terminal view while measuring.
@@ -75,6 +80,8 @@ The default is
 .Ql html .
 .It Fl o , Fl output Ar string
 Directory for a saved report; defaults to the current directory.
+Reports are staged before publication and receive a numeric suffix instead of
+overwriting an existing report with the same name.
 .It Fl verbose
 Print full statistical tables to stdout.
 .It Fl show-output

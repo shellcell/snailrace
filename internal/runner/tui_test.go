@@ -35,6 +35,26 @@ func TestFixedDurationTUIRejectsEarlyExit(t *testing.T) {
 	}
 }
 
+func TestFixedDurationTUIExcludesTerminationDelay(t *testing.T) {
+	duration := 50 * time.Millisecond
+	started := time.Now()
+	run, err := runTUIOnce(
+		context.Background(),
+		Spec{Name: "ignore-term", Shell: "trap '' TERM; while :; do :; done"},
+		5*time.Millisecond,
+		Options{TUI: true, Duration: duration},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime := time.Since(started); runtime > 2*time.Second {
+		t.Fatalf("fixed-duration run took %s, teardown should be outside measurement", runtime)
+	}
+	if run.WallSeconds < duration.Seconds() || run.WallSeconds > 0.5 {
+		t.Fatalf("wall time = %.3fs, want approximately %.3fs", run.WallSeconds, duration.Seconds())
+	}
+}
+
 func TestTUIRecordsNonZeroExit(t *testing.T) {
 	run, err := runTUIOnce(
 		context.Background(), Spec{Name: "exit", Shell: "exit 7"},

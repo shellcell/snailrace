@@ -9,6 +9,13 @@ import (
 
 func writeMarkdownRanking(writer io.Writer, report model.Report) {
 	ranking := calculateRanking(report)
+	if len(ranking.rows) == 0 {
+		fmt.Fprintf(
+			writer, "## Ranking Unavailable\n\n%s.\n\n",
+			escapeMarkdown(ranking.unavailableReason),
+		)
+		return
+	}
 	fmt.Fprintln(writer, "## Category Leaders (Point Estimates)")
 	fmt.Fprintln(writer, "\n| Category | Tool | Value |")
 	fmt.Fprintln(writer, "|---|---|---:|")
@@ -22,6 +29,13 @@ func writeMarkdownRanking(writer io.Writer, report model.Report) {
 		writer, "\nComparison baseline: **%s**. Lower balanced index is better.\n",
 		escapeMarkdown(report.Benchmarks[baselineIndex(report)].Tool.Name),
 	)
+	if !ranking.available {
+		fmt.Fprintf(
+			writer, "\n## Overall Ranking Unavailable\n\n%s.\n\n",
+			escapeMarkdown(ranking.unavailableReason),
+		)
+		return
+	}
 	fmt.Fprintln(writer, "\n## Overall Ranking (Point Estimates)")
 	fmt.Fprintf(
 		writer,

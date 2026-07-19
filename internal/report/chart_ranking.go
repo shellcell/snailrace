@@ -19,14 +19,18 @@ type rankingChartMetric struct {
 
 func rankingCharts(report model.Report) []svgChart {
 	ranking := calculateRanking(report)
-	metrics := []rankingChartMetric{
-		{"BALANCED INDEX", formatScore,
-			func(row rankingRow) float64 { return row.overallScore },
-			func(row rankingRow) int { return row.overallRank }},
-		{ranking.primaryLabel, ranking.primaryUnit,
-			func(row rankingRow) float64 { return row.primaryValue },
-			func(row rankingRow) int { return row.primaryRank }},
+	if len(ranking.rows) == 0 {
+		return nil
 	}
+	var metrics []rankingChartMetric
+	if ranking.available {
+		metrics = append(metrics, rankingChartMetric{"BALANCED INDEX", formatScore,
+			func(row rankingRow) float64 { return row.overallScore },
+			func(row rankingRow) int { return row.overallRank }})
+	}
+	metrics = append(metrics, rankingChartMetric{ranking.primaryLabel, ranking.primaryUnit,
+		func(row rankingRow) float64 { return row.primaryValue },
+		func(row rankingRow) int { return row.primaryRank }})
 	if !(report.Config.Mode == "tui" && report.Config.DurationSeconds > 0) {
 		metrics = append(metrics, rankingChartMetric{
 			"CPU COST", formatDuration,

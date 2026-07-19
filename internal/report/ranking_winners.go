@@ -11,20 +11,26 @@ func rankingWinners(report model.Report, ranking rankingData) []categoryWinner {
 	if len(ranking.rows) == 0 {
 		return nil
 	}
-	winners := []categoryWinner{
-		winnerForRank(report, ranking.rows, "OVERALL", func(row rankingRow) int {
+	var winners []categoryWinner
+	appendWinner := func(winner categoryWinner) {
+		if len(winner.benchmarks) > 0 {
+			winners = append(winners, winner)
+		}
+	}
+	if ranking.available {
+		appendWinner(winnerForRank(report, ranking.rows, "OVERALL", func(row rankingRow) int {
 			return row.overallRank
 		}, func(row rankingRow) string {
 			return fmt.Sprintf("%.3fx balanced index", row.overallScore)
-		}),
-		winnerForRank(report, ranking.rows, ranking.primaryLabel, func(row rankingRow) int {
-			return row.primaryRank
-		}, func(row rankingRow) string {
-			return ranking.primaryUnit(row.primaryValue)
-		}),
+		}))
 	}
+	appendWinner(winnerForRank(report, ranking.rows, ranking.primaryLabel, func(row rankingRow) int {
+		return row.primaryRank
+	}, func(row rankingRow) string {
+		return ranking.primaryUnit(row.primaryValue)
+	}))
 	if !(report.Config.Mode == "tui" && report.Config.DurationSeconds > 0) {
-		winners = append(winners, winnerForRank(
+		appendWinner(winnerForRank(
 			report, ranking.rows, "CPU COST", func(row rankingRow) int {
 				return row.cpuRank
 			}, func(row rankingRow) string {
@@ -32,13 +38,13 @@ func rankingWinners(report model.Report, ranking rankingData) []categoryWinner {
 			}))
 	}
 	if ranking.ramAvailable {
-		winners = append(winners, winnerForRank(
+		appendWinner(winnerForRank(
 			report, ranking.rows, "RAM COST",
 			func(row rankingRow) int { return row.ramRank },
 			func(row rankingRow) string { return formatBytes(row.ramValue) + " aggregate" },
 		))
 	}
-	winners = append(winners, winnerForRank(
+	appendWinner(winnerForRank(
 		report, ranking.rows, "LINKED SIZE",
 		func(row rankingRow) int { return row.footprintRank },
 		func(row rankingRow) string { return formatBytes(row.footprintValue) },

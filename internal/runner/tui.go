@@ -65,7 +65,7 @@ func runTUIOnce(
 	waitDone := make(chan error, 1)
 	go func() { waitDone <- cmd.Wait() }()
 
-	waitErr, elapsed, reason := waitForTUI(
+	waitResult := waitForTUI(
 		ctx, cmd, options.Duration, started, waitDone,
 	)
 	signalProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
@@ -77,17 +77,26 @@ func runTUIOnce(
 	if ctx.Err() != nil {
 		return model.Run{}, ctx.Err()
 	}
-	if options.Duration > 0 && reason == "exited" {
+	if options.Duration > 0 && waitResult.reason == "exited" {
 		return model.Run{}, errors.New("TUI exited before the fixed duration")
 	}
-	if waitErr != nil && reason == "exited" && !isNonZeroExit(cmd, waitErr) {
-		return model.Run{}, waitErr
+	if waitResult.err != nil && waitResult.reason == "exited" &&
+		!isNonZeroExit(cmd, waitResult.err) {
+		return model.Run{}, waitResult.err
 	}
 	select {
 	case <-outputDone:
 	case <-time.After(100 * time.Millisecond):
 	}
-	return makeTUIRun(cmd, elapsed, user, system, rusageRSS, peak, reason), nil
+	return makeTUIRun(
+		cmd, waitResult.elapsed, user, system, rusageRSS, peak, waitResult.reason,
+	), nil
+}
+
+type tuiWaitResult struct {
+	err     error
+	elapsed time.Duration
+	reason  string
 }
 
 func waitForTUI(
@@ -96,14 +105,16 @@ func waitForTUI(
 	duration time.Duration,
 	started time.Time,
 	waitDone <-chan error,
-) (error, time.Duration, string) {
+) tuiWaitResult {
 	if duration == 0 {
 		select {
 		case err := <-waitDone:
-			return err, time.Since(started), "exited"
+			return tuiWaitResult{err: err, elapsed: time.Since(started), reason: "exited"}
 		case <-ctx.Done():
 			signalProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
-			return <-waitDone, time.Since(started), "interrupted"
+			return tuiWaitResult{
+				err: <-waitDone, elapsed: time.Since(started), reason: "interrupted",
+			}
 		}
 	}
 	remaining := time.Until(started.Add(duration))
@@ -114,18 +125,15 @@ func waitForTUI(
 	defer timer.Stop()
 	select {
 	case err := <-waitDone:
-		return err, time.Since(started), "exited"
+		return tuiWaitResult{err: err, elapsed: time.Since(started), reason: "exited"}
 	case <-ctx.Done():
 		signalProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
-		return <-waitDone, time.Since(started), "interrupted"
-	case <-timer.C:
-		signalProcessGroup(cmd.Process.Pid, syscall.SIGTERM)
-		select {
-		case err := <-waitDone:
-			return err, time.Since(started), "duration"
-		case <-time.After(time.Second):
-			signalProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
-			return <-waitDone, time.Since(started), "duration"
+		return tuiWaitResult{
+			err: <-waitDone, elapsed: time.Since(started), reason: "interrupted",
 		}
+	case <-timer.C:
+		elapsed := time.Since(started)
+		signalProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
+		return tuiWaitResult{err: <-waitDone, elapsed: elapsed, reason: "duration"}
 	}
 }

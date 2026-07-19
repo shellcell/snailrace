@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"os/signal"
 	"runtime"
 	"syscall"
@@ -100,10 +99,29 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 	if err != nil && !interrupted {
 		return err
 	}
+	rankingNote := ""
+	if config.Baseline == 0 {
+		ranking := analysis.Calculate(config, benchmarks)
+		if ranking.Available && len(ranking.Rows) > 0 {
+			config.Baseline = ranking.Rows[0].Benchmark + 1
+		} else {
+			config.Baseline = firstEligibleBenchmark(benchmarks) + 1
+			config.BaselineAutomatic = false
+			rankingNote = fmt.Sprintf(
+				"Balanced ranking unavailable: %s. %s is used only as the comparison baseline.",
+				ranking.UnavailableReason,
+				benchmarks[config.Baseline-1].Tool.Name,
+			)
+		}
+	}
 	notes := platformNotes(
 		options.tui, options.duration, len(options.specs) > 1,
 		config.BaselineAutomatic, config.OrderSeed, config.OutputMode,
 	)
+	if rankingNote != "" {
+		fmt.Fprintln(stderr, rankingNote)
+		notes = append([]string{rankingNote}, notes...)
+	}
 	if interrupted {
 		completed := 0
 		if len(benchmarks) > 0 {
@@ -125,9 +143,6 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 		fmt.Fprintln(stderr, hint)
 		notes = append(notes, hint)
 	}
-	if config.Baseline == 0 {
-		config.Baseline = analysis.AutomaticBaseline(config, benchmarks)
-	}
 	_, host.MemoryAfterBytes = platform.Memory()
 	result := model.Report{
 		MeasuredAt: measuredAt, Config: config, Host: host,
@@ -140,6 +155,15 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	return nil
+}
+
+func firstEligibleBenchmark(benchmarks []model.Benchmark) int {
+	for index, benchmark := range benchmarks {
+		if benchmark.EligibleForRanking() {
+			return index
+		}
+	}
+	return 0
 }
 
 func oneBasedOrder(order [][]int) [][]int {
@@ -170,9 +194,7 @@ func prepare(ctx context.Context, command string, output io.Writer) error {
 	if command == "" {
 		return nil
 	}
-	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", command)
-	cmd.Stdout, cmd.Stderr = output, output
-	if err := cmd.Run(); err != nil {
+	if err := runner.RunPreparation(ctx, command, output); err != nil {
 		return fmt.Errorf("prepare command: %w", err)
 	}
 	return nil

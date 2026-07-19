@@ -197,6 +197,10 @@ func progressEstimate(name string, scale float64) runner.ProgressEstimate {
 	stats := model.Stats{Mean: scale}
 	return runner.ProgressEstimate{
 		ToolName: name, Completed: 1, Total: 2, HasEstimate: true,
+		Runs: []model.Run{{
+			WallSeconds: scale, CPUUserSeconds: scale,
+			MeanResidentBytes: scale, PeakResidentBytes: scale,
+		}},
 		DiskFootprintBytes: int64(scale * 100),
 		Estimate: model.Summary{
 			WallSeconds: stats, CPUTotalSeconds: stats,

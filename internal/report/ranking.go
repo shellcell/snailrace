@@ -8,7 +8,8 @@ import (
 func calculateRanking(report model.Report) rankingData {
 	numeric := analysis.Calculate(report.Config, report.Benchmarks)
 	result := rankingData{
-		rows:         make([]rankingRow, len(numeric.Rows)),
+		rows:      make([]rankingRow, len(numeric.Rows)),
+		available: numeric.Available, unavailableReason: numeric.UnavailableReason,
 		ramAvailable: numeric.RAMAvailable, ramPresent: numeric.RAMPresent,
 		bestOverall:  numeric.BestOverall,
 		primaryRatio: numeric.PrimaryRatio, cpuRatio: numeric.CPURatio,

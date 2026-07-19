@@ -186,8 +186,13 @@ func TestFixedTUIRankingChartUsesCPUUnits(t *testing.T) {
 		},
 	}
 	charts := rankingCharts(report)
-	if len(charts) < 2 || charts[1].title != "CPU" ||
-		!strings.Contains(charts[1].body, "%") {
+	found := false
+	for _, chart := range charts {
+		if chart.title == "CPU" && strings.Contains(chart.body, "%") {
+			found = true
+		}
+	}
+	if !found {
 		t.Fatal("fixed TUI primary ranking chart should show average CPU percentage")
 	}
 }

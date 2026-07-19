@@ -18,6 +18,8 @@ func WriteMarkdownWithCharts(
 	charts []ChartArtifact,
 	chartDirectory string,
 ) error {
+	checked := newErrorWriter(writer)
+	writer = checked
 	fmt.Fprintf(
 		writer,
 		"# 🐌 Snailrace Report\n\nMeasured %s on `%s/%s`. "+
@@ -27,6 +29,7 @@ func WriteMarkdownWithCharts(
 		report.Config.Runs, report.Config.Warmups, report.Config.Mode,
 	)
 	writeMarkdownCommandLegend(writer, report)
+	writeMarkdownFailures(writer, report)
 	if len(report.Benchmarks) > 1 {
 		writeMarkdownRanking(writer, report)
 	}
@@ -56,7 +59,7 @@ func WriteMarkdownWithCharts(
 	for _, note := range report.Notes {
 		fmt.Fprintf(writer, "> %s\n\n", escapeMarkdown(note))
 	}
-	return nil
+	return checked.Err()
 }
 
 func writeMarkdownBenchmark(

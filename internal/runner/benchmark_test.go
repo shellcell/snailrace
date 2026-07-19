@@ -75,6 +75,37 @@ func TestBenchmarkContinuesAfterNonZeroExit(t *testing.T) {
 	}
 }
 
+func TestBenchmarkRejectsInvalidInputs(t *testing.T) {
+	validSpec := Spec{Name: "true", Args: []string{"/bin/true"}}
+	validConfig := Config{Runs: 1, Interval: time.Millisecond}
+	tests := []struct {
+		name   string
+		specs  []Spec
+		config Config
+	}{
+		{"no specs", nil, validConfig},
+		{"empty spec", []Spec{{Name: "empty"}}, validConfig},
+		{"both command forms", []Spec{{Name: "both", Shell: "true", Args: []string{"true"}}}, validConfig},
+		{"zero runs", []Spec{validSpec}, Config{Interval: time.Millisecond}},
+		{"zero interval", []Spec{validSpec}, Config{Runs: 1}},
+		{"bad schedule index", []Spec{validSpec}, Config{
+			Runs: 1, Interval: time.Millisecond, MeasurementOrder: [][]int{{1}},
+		}},
+		{"wrong schedule rounds", []Spec{validSpec}, Config{
+			Runs: 2, Interval: time.Millisecond, MeasurementOrder: [][]int{{0}},
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := Benchmark(
+				context.Background(), test.specs, test.config, Options{},
+			); err == nil {
+				t.Fatal("expected validation error")
+			}
+		})
+	}
+}
+
 func completedRoundCount(estimates []ProgressEstimate) int {
 	if len(estimates) == 0 {
 		return 0

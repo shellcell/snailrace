@@ -11,6 +11,13 @@ import (
 
 func writeHTMLRanking(writer io.Writer, report model.Report) {
 	ranking := calculateRanking(report)
+	if len(ranking.rows) == 0 {
+		fmt.Fprintf(
+			writer, `<section><h2>Ranking unavailable</h2><p class="uncertain">%s</p></section>`,
+			html.EscapeString(ranking.unavailableReason),
+		)
+		return
+	}
 	fmt.Fprint(writer, `<section><h2>Category leaders (point estimates)</h2><div class="winner-grid">`)
 	for _, winner := range ranking.winners {
 		var names string
@@ -27,6 +34,13 @@ func writeHTMLRanking(writer io.Writer, report model.Report) {
 			html.EscapeString(winner.category), names,
 			html.EscapeString(winner.value),
 		)
+	}
+	if !ranking.available {
+		fmt.Fprintf(
+			writer, `</div><h2>Overall ranking unavailable</h2><p class="uncertain">%s</p></section>`,
+			html.EscapeString(ranking.unavailableReason),
+		)
+		return
 	}
 	fmt.Fprintf(
 		writer,

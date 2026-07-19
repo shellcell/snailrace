@@ -2,8 +2,10 @@ package app
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/shellcell/snailrace/internal/model"
@@ -113,8 +115,9 @@ func TestRunIgnoresNonZeroCommandExit(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout.String(), "TIME") {
-		t.Fatal("stdout does not contain the completed report")
+	if !strings.Contains(stdout.String(), "FAILED") ||
+		!strings.Contains(stdout.String(), "excluded from rankings") {
+		t.Fatal("stdout does not report the failed command")
 	}
 }
 
@@ -137,5 +140,141 @@ func TestRunSavesDefaultHTMLInCurrentDirectory(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "Report saved to") {
 		t.Fatal("stderr does not announce the default report path")
+	}
+}
+
+func TestSavingSameReportUsesUniqueNames(t *testing.T) {
+	directory := t.TempDir()
+	result := model.Report{
+		Config: model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{{
+			Tool: model.ToolInfo{Name: "same"},
+		}},
+	}
+	const saves = 6
+	errors := make(chan error, saves)
+	var wait sync.WaitGroup
+	for index := 0; index < saves; index++ {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			errors <- saveReportFormats(io.Discard, directory, []string{"html"}, result)
+		}()
+	}
+	wait.Wait()
+	close(errors)
+	for err := range errors {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != saves {
+		t.Fatalf("saved entries = %d, want %d unique reports", len(entries), saves)
+	}
+}
+
+func TestSavingDifferentFormatsDoesNotReuseExistingStem(t *testing.T) {
+	directory := t.TempDir()
+	result := model.Report{
+		Config:     model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{{Tool: model.ToolInfo{Name: "same"}}},
+	}
+	if err := saveReportFormats(io.Discard, directory, []string{"html"}, result); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveReportFormats(io.Discard, directory, []string{"markdown"}, result); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 || entries[0].Name() == entries[1].Name() {
+		t.Fatalf("saved entries reused a report stem: %v", entries)
+	}
+}
+
+func TestFailedSavePublishesNoPartialReports(t *testing.T) {
+	directory := t.TempDir()
+	result := model.Report{
+		Config:     model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{{Tool: model.ToolInfo{Name: "tool"}}},
+	}
+	if err := saveReportFormats(
+		io.Discard, directory, []string{"html", "unknown"}, result,
+	); err == nil {
+		t.Fatal("invalid staged format should fail")
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("failed save left partial entries: %v", entries)
+	}
+}
+
+func TestPublishingNeverReplacesExistingDestination(t *testing.T) {
+	directory := t.TempDir()
+	staged := directory + "/staged"
+	final := directory + "/final"
+	if err := os.WriteFile(staged, []byte("new"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(final, []byte("existing"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := renameNoReplace(staged, final); err == nil {
+		t.Fatal("publication replaced an existing destination")
+	}
+	data, err := os.ReadFile(final)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "existing" {
+		t.Fatalf("destination content = %q, want existing", data)
+	}
+}
+
+func TestSavedSVGBundleIncludesCommandFailures(t *testing.T) {
+	directory := t.TempDir()
+	failedRun := model.Run{ExitCode: 7, StopReason: "exited", WallSeconds: 0.001}
+	result := model.Report{
+		Config: model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{{
+			Tool: model.ToolInfo{Name: "failed"},
+			Runs: []model.Run{failedRun}, Summary: model.Summarize([]model.Run{failedRun}),
+		}},
+	}
+	if err := saveReportFormats(io.Discard, directory, []string{"svg"}, result); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("bundle entries = %v, error = %v", entries, err)
+	}
+	charts, err := os.ReadDir(directory + "/" + entries[0].Name() + "/charts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, chart := range charts {
+		if strings.Contains(chart.Name(), "command-failures") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("SVG charts do not include command failures: %v", charts)
+	}
+}
+
+func TestFormatAliasesAreCanonicalizedBeforeSaving(t *testing.T) {
+	formats := uniqueFormats([]string{"text", "txt", "markdown", "md"})
+	if len(formats) != 2 || formats[0] != "text" || formats[1] != "markdown" {
+		t.Fatalf("canonical formats = %v", formats)
 	}
 }

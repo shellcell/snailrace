@@ -72,6 +72,10 @@ type Run struct {
 	SampleCoverageSeconds      float64 `json:"sample_coverage_seconds"`
 }
 
+func (run Run) Failed() bool {
+	return run.StopReason != "duration" && run.ExitCode != 0
+}
+
 type Stats struct {
 	N         int     `json:"n"`
 	Min       float64 `json:"min"`
@@ -114,6 +118,20 @@ type Benchmark struct {
 	Tool    ToolInfo `json:"tool"`
 	Runs    []Run    `json:"runs"`
 	Summary Summary  `json:"summary"`
+}
+
+func (benchmark Benchmark) FailedRunCount() int {
+	count := 0
+	for _, run := range benchmark.Runs {
+		if run.Failed() {
+			count++
+		}
+	}
+	return count
+}
+
+func (benchmark Benchmark) EligibleForRanking() bool {
+	return len(benchmark.Runs) > 0 && benchmark.FailedRunCount() == 0
 }
 
 type Report struct {

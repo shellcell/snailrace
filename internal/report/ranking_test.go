@@ -14,7 +14,7 @@ func TestAutomaticBaselineUsesBalancedWinner(t *testing.T) {
 		rankingBenchmark("efficient", 3, 1, 100, 100, 100),
 	}
 	config := model.Config{Mode: "command"}
-	if got := analysis.AutomaticBaseline(config, benchmarks); got != 3 {
+	if got, ok := analysis.AutomaticBaseline(config, benchmarks); !ok || got != 3 {
 		t.Fatalf("baseline = %d, want efficient tool at index 3", got)
 	}
 	ranking := calculateRanking(model.Report{Config: config, Benchmarks: benchmarks})

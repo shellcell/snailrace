@@ -18,6 +18,7 @@ func writeCompactText(writer io.Writer, report model.Report) error {
 	terminal := writerIsTerminal(writer)
 	var body strings.Builder
 	body.WriteString("\n")
+	writeTextFailures(&body, report)
 	if len(report.Benchmarks) == 1 {
 		writeCompactSingle(&body, report, terminal)
 	} else if len(report.Benchmarks) > 1 {
@@ -101,17 +102,25 @@ func cpuCompactUnit(fixedTUI bool, value float64) string {
 
 func writeCompactBars(body *strings.Builder, report model.Report, terminal bool) {
 	ranking := calculateRanking(report)
+	if len(ranking.rows) == 0 {
+		fmt.Fprintf(body, "BALANCED  unavailable: %s\n\n", ranking.unavailableReason)
+		return
+	}
 	rows := rowsByBenchmark(ranking.rows)
 	labelWidth := compactLabelWidth(report)
 
-	winner := report.Benchmarks[ranking.rows[0].benchmark].Tool.Name
-	fmt.Fprintf(
-		body, "BALANCED  %s        winner %s\n",
-		strings.Join(indexDimensionLabels(report.Config), ","), winner,
-	)
-	writeBarGroup(body, report, terminal, labelWidth, rows, func(r rankingRow) float64 {
-		return r.overallScore
-	}, func(r rankingRow) string { return formatScore(r.overallScore) })
+	if ranking.available {
+		winner := report.Benchmarks[ranking.rows[0].benchmark].Tool.Name
+		fmt.Fprintf(
+			body, "BALANCED  %s        winner %s\n",
+			balancedIndexCategories(ranking), winner,
+		)
+		writeBarGroup(body, report, terminal, labelWidth, rows, func(r rankingRow) float64 {
+			return r.overallScore
+		}, func(r rankingRow) string { return formatScore(r.overallScore) })
+	} else {
+		fmt.Fprintf(body, "BALANCED  unavailable: %s\n\n", ranking.unavailableReason)
+	}
 
 	for _, metric := range compactMetrics(report, ranking) {
 		if !metric.available {
@@ -230,12 +239,4 @@ func padLabel(label string, width int) string {
 		return label + strings.Repeat(" ", pad)
 	}
 	return label
-}
-
-func indexDimensionLabels(config model.Config) []string {
-	dimensions := config.IndexDimensions
-	if len(dimensions) == 0 {
-		dimensions = []string{"time", "cpu", "ram"}
-	}
-	return dimensions
 }

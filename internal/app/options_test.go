@@ -31,6 +31,14 @@ func TestRejectsLabelCountMismatch(t *testing.T) {
 	}
 }
 
+func TestRejectsEmptyShellCommand(t *testing.T) {
+	for _, command := range []string{"", " \t\n"} {
+		if _, err := parseOptions([]string{"-c", command}, io.Discard); err == nil {
+			t.Fatalf("command %q should be rejected", command)
+		}
+	}
+}
+
 func TestSingleLabelNamesPositionalCommand(t *testing.T) {
 	options, err := parseOptions(
 		[]string{"-label", "build", "--", "sleep", "0.1"},

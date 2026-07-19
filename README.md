@@ -113,8 +113,13 @@ sample standard deviation, median, p95, range, and a 95% Student's t interval.
 - The default index combines normalized time, CPU, and RAM costs.
 - RAM cost combines mean and peak RSS.
 - Sampling-limited RAM is excluded from the index.
+- Commands with non-zero measured exits continue running but are excluded from rankings.
+- If none of the selected dimensions is usable, reports mark the balanced ranking unavailable.
 - Ctrl+C keeps completed comparison rounds.
 - Command output is discarded unless `-show-output` is set.
+
+Saved reports are staged before publication and receive a numeric suffix rather
+than overwriting an existing report with the same timestamp.
 
 ## Platform Notes
 

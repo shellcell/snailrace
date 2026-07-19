@@ -59,6 +59,8 @@ th:first-child,td:first-child{text-align:left}code{color:var(--accent);white-spa
 </style></head><body><main>`
 
 func writeHTML(writer io.Writer, report model.Report) error {
+	checked := newErrorWriter(writer)
+	writer = checked
 	fmt.Fprint(writer, htmlStart)
 	fmt.Fprintf(
 		writer,
@@ -68,6 +70,7 @@ func writeHTML(writer io.Writer, report model.Report) error {
 	)
 	writeCards(writer, report)
 	writeHTMLCommandLegend(writer, report)
+	writeHTMLFailures(writer, report)
 	if len(report.Benchmarks) > 1 {
 		writeHTMLRanking(writer, report)
 	}
@@ -89,8 +92,8 @@ func writeHTML(writer io.Writer, report model.Report) error {
 	for _, note := range report.Notes {
 		fmt.Fprintf(writer, "<p>Note: %s</p>", html.EscapeString(note))
 	}
-	_, err := fmt.Fprint(writer, "</div></main></body></html>")
-	return err
+	fmt.Fprint(writer, "</div></main></body></html>")
+	return checked.Err()
 }
 
 type chartSection struct {

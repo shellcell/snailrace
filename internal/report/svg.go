@@ -22,10 +22,16 @@ const svgReportStyle = `<style>` +
 	`</style>`
 
 func writeSVG(writer io.Writer, report model.Report) error {
+	checked := newErrorWriter(writer)
+	writer = checked
 	var content strings.Builder
 	y := svgHeader(&content, report)
 	y = svgCommandLegend(&content, report, y)
-	y = svgCharts(&content, reportCharts(report), y)
+	charts := reportCharts(report)
+	if failures := failureChart(report); failures.height > 0 {
+		charts = append([]svgChart{failures}, charts...)
+	}
+	y = svgCharts(&content, charts, y)
 	height := y + 36
 	fmt.Fprintf(
 		writer,
@@ -36,7 +42,7 @@ func writeSVG(writer io.Writer, report model.Report) error {
 			`<rect width="100%%" height="100%%" fill="#2e3440"/>%s%s</svg>`,
 		svgReportWidth, height, svgReportStyle, content.String(),
 	)
-	return nil
+	return checked.Err()
 }
 
 func svgHeader(output *strings.Builder, report model.Report) int {

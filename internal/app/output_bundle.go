@@ -1,10 +1,12 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/shellcell/snailrace/internal/model"
 	"github.com/shellcell/snailrace/internal/report"
@@ -21,12 +23,23 @@ func saveReportFormats(
 	}
 	formats = uniqueFormats(formats)
 	needsCharts := containsFormat(formats, "svg") ||
-		containsFormat(formats, "markdown") || containsFormat(formats, "md")
+		containsFormat(formats, "markdown")
+	stem, release, err := reserveReportStem(directory, result)
+	if err != nil {
+		return err
+	}
+	defer release()
+	staging, err := os.MkdirTemp(directory, "."+stem+".tmp-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(staging)
+
 	var charts []report.ChartArtifact
-	bundleDirectory := filepath.Join(directory, reportStem(result))
+	stagedBundle := filepath.Join(staging, stem)
+	finalBundle := filepath.Join(directory, stem)
 	if needsCharts {
-		chartDirectory := filepath.Join(bundleDirectory, "charts")
-		var err error
+		chartDirectory := filepath.Join(stagedBundle, "charts")
 		charts, err = report.WriteChartFiles(
 			chartDirectory, result, containsFormat(formats, "svg"),
 		)
@@ -34,31 +47,91 @@ func saveReportFormats(
 			return err
 		}
 	}
+	type stagedOutput struct{ staged, final string }
+	var outputs []stagedOutput
+	var announcements []string
 	for _, format := range formats {
 		switch format {
 		case "svg":
-			if err := announce(stderr, filepath.Join(bundleDirectory, "charts")); err != nil {
-				return err
-			}
-		case "markdown", "md":
-			path := filepath.Join(bundleDirectory, "report.md")
+			announcements = append(announcements, filepath.Join(finalBundle, "charts"))
+		case "markdown":
+			path := filepath.Join(stagedBundle, "report.md")
 			if err := writeMarkdownFile(path, result, charts); err != nil {
 				return err
 			}
-			if err := announce(stderr, path); err != nil {
-				return err
-			}
+			announcements = append(announcements, filepath.Join(finalBundle, "report.md"))
 		default:
-			path := reportPath(directory, format, result)
-			if err := writeReportFile(path, format, result); err != nil {
+			stagedPath := reportPathWithStem(staging, format, stem)
+			if err := writeReportFile(stagedPath, format, result); err != nil {
 				return err
 			}
-			if err := announce(stderr, path); err != nil {
-				return err
+			finalPath := reportPathWithStem(directory, format, stem)
+			outputs = append(outputs, stagedOutput{staged: stagedPath, final: finalPath})
+			announcements = append(announcements, finalPath)
+		}
+	}
+	if needsCharts {
+		outputs = append(outputs, stagedOutput{staged: stagedBundle, final: finalBundle})
+	}
+	var published []string
+	for _, output := range outputs {
+		if err := renameNoReplace(output.staged, output.final); err != nil {
+			for _, path := range published {
+				os.RemoveAll(path)
 			}
+			return err
+		}
+		published = append(published, output.final)
+	}
+	for _, path := range announcements {
+		if err := announce(stderr, path); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func reserveReportStem(
+	directory string,
+	result model.Report,
+) (string, func(), error) {
+	base := reportStem(result)
+	for suffix := 1; ; suffix++ {
+		stem := base
+		if suffix > 1 {
+			stem = fmt.Sprintf("%s-%d", base, suffix)
+		}
+		lockPath := filepath.Join(directory, "."+stem+".lock")
+		lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if errors.Is(err, os.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return "", nil, err
+		}
+		if err := lock.Close(); err != nil {
+			os.Remove(lockPath)
+			return "", nil, err
+		}
+		if reportStemExists(directory, stem) {
+			os.Remove(lockPath)
+			continue
+		}
+		return stem, func() { os.Remove(lockPath) }, nil
+	}
+}
+
+func reportStemExists(directory, stem string) bool {
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return true
+	}
+	for _, entry := range entries {
+		if entry.Name() == stem || strings.HasPrefix(entry.Name(), stem+".") {
+			return true
+		}
+	}
+	return false
 }
 
 func writeMarkdownFile(
@@ -74,11 +147,12 @@ func writeMarkdownFile(
 		return err
 	}
 	writeErr := report.WriteMarkdownWithCharts(file, result, charts, "charts")
-	closeErr := file.Close()
-	if writeErr != nil {
-		return writeErr
+	syncErr := error(nil)
+	if writeErr == nil {
+		syncErr = file.Sync()
 	}
-	return closeErr
+	closeErr := file.Close()
+	return errors.Join(writeErr, syncErr, closeErr)
 }
 
 func writeReportFile(path, format string, result model.Report) error {
@@ -87,17 +161,25 @@ func writeReportFile(path, format string, result model.Report) error {
 		return err
 	}
 	writeErr := report.Write(file, format, result)
-	closeErr := file.Close()
-	if writeErr != nil {
-		return writeErr
+	syncErr := error(nil)
+	if writeErr == nil {
+		syncErr = file.Sync()
 	}
-	return closeErr
+	closeErr := file.Close()
+	return errors.Join(writeErr, syncErr, closeErr)
 }
 
 func uniqueFormats(formats []string) []string {
 	seen := make(map[string]bool)
 	result := make([]string, 0, len(formats))
 	for _, format := range formats {
+		format = strings.ToLower(format)
+		switch format {
+		case "txt":
+			format = "text"
+		case "md":
+			format = "markdown"
+		}
 		if !seen[format] {
 			seen[format] = true
 			result = append(result, format)

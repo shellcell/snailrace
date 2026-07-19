@@ -25,7 +25,11 @@ func WriteChartFiles(
 	}
 	charts := reportCharts(report)
 	if includeCommands {
-		charts = append([]svgChart{commandLegendChart(report)}, charts...)
+		prefix := []svgChart{commandLegendChart(report)}
+		if failures := failureChart(report); failures.height > 0 {
+			prefix = append(prefix, failures)
+		}
+		charts = append(prefix, charts...)
 	}
 	artifacts := make([]ChartArtifact, 0, len(charts))
 	for index, chart := range charts {

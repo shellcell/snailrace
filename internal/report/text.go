@@ -58,6 +58,7 @@ func writeVerboseText(writer io.Writer, report model.Report) error {
 	}
 	fmt.Fprintln(w)
 	writeTextCommandLegend(w, report)
+	writeTextFailures(w, report)
 	if len(report.Benchmarks) > 1 {
 		writeTextRanking(w, report)
 	}

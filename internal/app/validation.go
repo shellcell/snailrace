@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/shellcell/snailrace/internal/report"
@@ -40,6 +41,11 @@ func validateOptions(result options, commands []string, positional int) error {
 	}
 	if len(commands) == 0 && positional == 0 {
 		return errors.New("no command specified")
+	}
+	for _, command := range commands {
+		if strings.TrimSpace(command) == "" {
+			return errors.New("command cannot be empty")
+		}
 	}
 	commandCount := len(commands)
 	if positional > 0 {
