@@ -30,4 +30,7 @@ func TestDefaultFormatIsHTML(t *testing.T) {
 	if !reflect.DeepEqual(options.formats, []string{"html"}) {
 		t.Fatalf("formats = %#v, want html", options.formats)
 	}
+	if options.output != "." {
+		t.Fatalf("output = %q, want current directory", options.output)
+	}
 }

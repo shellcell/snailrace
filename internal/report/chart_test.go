@@ -120,6 +120,39 @@ func TestChartLegendsUseToolIdentityColors(t *testing.T) {
 	}
 }
 
+func TestRankingChartsPutBestAtTopAndWorstAtBottom(t *testing.T) {
+	report := model.Report{
+		Config: model.Config{
+			Mode: "command", Baseline: 3,
+			IndexDimensions: []string{"time", "cpu"},
+		},
+		Benchmarks: []model.Benchmark{
+			benchmarkWithResourceCosts("fast", 1, 9, 300, 300, 300),
+			benchmarkWithResourceCosts("middle", 2, 2, 200, 200, 200),
+			benchmarkWithResourceCosts("efficient", 3, 1, 100, 100, 100),
+		},
+	}
+	expected := map[string][]string{
+		"BALANCED INDEX": {"#1 efficient", "#2 middle", "#3 fast"},
+		"TIME":           {"#1 fast", "#2 middle", "#3 efficient"},
+		"CPU COST":       {"#1 efficient", "#2 middle", "#3 fast"},
+		"RAM AGGREGATE":  {"#1 efficient", "#2 middle", "#3 fast"},
+		"LINKED SIZE":    {"#1 efficient", "#2 middle", "#3 fast"},
+	}
+	for _, chart := range rankingCharts(report) {
+		order, ok := expected[chart.title]
+		if !ok {
+			t.Fatalf("missing expected order for %s chart", chart.title)
+		}
+		best := strings.Index(chart.body, order[0])
+		middle := strings.Index(chart.body, order[1])
+		worst := strings.Index(chart.body, order[2])
+		if best < 0 || middle <= best || worst <= middle {
+			t.Fatalf("%s chart does not put best at top and worst at bottom", chart.title)
+		}
+	}
+}
+
 func TestSingleRunDistributionOmitsUndefinedConfidenceWhisker(t *testing.T) {
 	report := model.Report{
 		Config:     model.Config{Mode: "command", Baseline: 1},

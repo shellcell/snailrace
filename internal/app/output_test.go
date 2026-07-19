@@ -105,6 +105,7 @@ func TestMarkdownAndSVGSavedAsChartBundle(t *testing.T) {
 }
 
 func TestRunIgnoresNonZeroCommandExit(t *testing.T) {
+	t.Chdir(t.TempDir())
 	var stdout, stderr bytes.Buffer
 	if err := Run(
 		[]string{"-n", "2", "-warmups", "0", "-c", "exit 7"},
@@ -114,5 +115,27 @@ func TestRunIgnoresNonZeroCommandExit(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "TIME") {
 		t.Fatal("stdout does not contain the completed report")
+	}
+}
+
+func TestRunSavesDefaultHTMLInCurrentDirectory(t *testing.T) {
+	directory := t.TempDir()
+	t.Chdir(directory)
+	var stdout, stderr bytes.Buffer
+	if err := Run(
+		[]string{"-n", "1", "-warmups", "0", "--", "/bin/true"},
+		&stdout, &stderr,
+	); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || !strings.HasSuffix(entries[0].Name(), ".html") {
+		t.Fatalf("saved entries = %v, want one HTML report", entries)
+	}
+	if !strings.Contains(stderr.String(), "Report saved to") {
+		t.Fatal("stderr does not announce the default report path")
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/shellcell/snailrace/internal/model"
@@ -102,7 +103,11 @@ func rankingBarChart(
 			`<text x="16" y="41" class="subtitle">%s</text>`,
 		html.EscapeString(metric.name), html.EscapeString(subtitle),
 	)
-	for index, row := range ranking.rows {
+	rows := append([]rankingRow(nil), ranking.rows...)
+	sort.SliceStable(rows, func(left, right int) bool {
+		return metric.rank(rows[left]) < metric.rank(rows[right])
+	})
+	for index, row := range rows {
 		y := 62 + index*rowHeight
 		value := metric.value(row)
 		width := value / maximum * plotWidth

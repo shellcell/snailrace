@@ -60,7 +60,7 @@ Compare shell commands:
 ./snailrace -n 20 -c 'grep needle data.txt' -c 'rg needle data.txt'
 ```
 
-Save an HTML report:
+An HTML report is saved to the current directory by default. Choose another directory:
 
 ```sh
 ./snailrace -format html -output ./reports -- ./my-program --flag
@@ -85,8 +85,8 @@ Measure an interactive TUI:
 | `-interval` | Sampling interval; default 10 ms |
 | `-index` | Index dimensions: `time,cpu,ram,disk` |
 | `-baseline` | 1-based baseline; `0` selects the winner |
-| `-f`, `-format` | `html`, `svg`, `markdown`, `json`, or `text` |
-| `-o`, `-output` | Report directory |
+| `-f`, `-format` | Saved format; default `html` |
+| `-o`, `-output` | Report directory; default current directory |
 | `-verbose` | Full statistical tables on stdout |
 | `-show-output` | Forward command output to stderr |
 | `tui` | Run inside a pseudo-terminal |
