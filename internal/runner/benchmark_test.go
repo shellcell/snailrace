@@ -139,6 +139,7 @@ func TestBenchmarkRejectsInvalidInputs(t *testing.T) {
 	}{
 		{"no specs", nil, validConfig},
 		{"empty spec", []Spec{{Name: "empty"}}, validConfig},
+		{"empty name", []Spec{{Args: []string{"true"}}}, validConfig},
 		{"both command forms", []Spec{{Name: "both", Shell: "true", Args: []string{"true"}}}, validConfig},
 		{"zero runs", []Spec{validSpec}, Config{Interval: time.Millisecond}},
 		{"zero interval", []Spec{validSpec}, Config{Runs: 1}},

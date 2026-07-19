@@ -14,20 +14,21 @@ import (
 const compactBarWidth = 20
 
 // writeCompactText renders the short, bar-chart stdout report used by default.
-func writeCompactText(writer io.Writer, report model.Report) error {
+func writeCompactText(writer io.Writer, renderer *Renderer) error {
+	report := renderer.report
 	terminal := writerIsTerminal(writer)
 	var body strings.Builder
 	body.WriteString("\n")
-	fmt.Fprintf(&body, "BALANCED DIMENSIONS  %s\n", includedDimensionsText(report))
-	for _, caveat := range reliabilityCaveats(report) {
+	fmt.Fprintf(&body, "BALANCED DIMENSIONS  %s\n", renderer.dimensionText)
+	for _, caveat := range renderer.caveats {
 		fmt.Fprintf(&body, "RELIABILITY  %s\n", caveat)
 	}
 	body.WriteString("\n")
 	writeTextFailures(&body, report)
 	if len(report.Benchmarks) == 1 {
-		writeCompactSingle(&body, report, terminal)
+		writeCompactSingle(&body, report, renderer.ranking, terminal)
 	} else if len(report.Benchmarks) > 1 {
-		writeCompactBars(&body, report, terminal)
+		writeCompactBars(&body, report, renderer.ranking, terminal)
 	}
 	_, err := io.WriteString(writer, body.String())
 	return err
@@ -105,8 +106,9 @@ func cpuCompactUnit(fixedTUI bool, value float64) string {
 	return formatDuration(value)
 }
 
-func writeCompactBars(body *strings.Builder, report model.Report, terminal bool) {
-	ranking := calculateRanking(report)
+func writeCompactBars(
+	body *strings.Builder, report model.Report, ranking rankingData, terminal bool,
+) {
 	if len(ranking.rows) == 0 {
 		fmt.Fprintf(body, "BALANCED  unavailable: %s\n\n", ranking.unavailableReason)
 		return
@@ -182,8 +184,9 @@ func writeBarGroup(
 	body.WriteString("\n")
 }
 
-func writeCompactSingle(body *strings.Builder, report model.Report, terminal bool) {
-	ranking := calculateRanking(report)
+func writeCompactSingle(
+	body *strings.Builder, report model.Report, ranking rankingData, terminal bool,
+) {
 	if len(ranking.rows) == 0 {
 		return
 	}

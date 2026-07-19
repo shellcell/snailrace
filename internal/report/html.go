@@ -58,6 +58,11 @@ th:first-child,td:first-child{text-align:left}code{color:var(--accent);white-spa
 </style></head><body><main>`
 
 func writeHTML(writer io.Writer, report model.Report) error {
+	return writeHTMLRenderer(writer, NewRenderer(report))
+}
+
+func writeHTMLRenderer(writer io.Writer, renderer *Renderer) error {
+	report := renderer.report
 	checked := newErrorWriter(writer)
 	writer = checked
 	fmt.Fprint(writer, htmlStart)
@@ -70,9 +75,9 @@ func writeHTML(writer io.Writer, report model.Report) error {
 	writeCards(writer, report)
 	fmt.Fprintf(
 		writer, `<p class="muted">Balanced index dimensions actually included: %s.</p>`,
-		html.EscapeString(includedDimensionsText(report)),
+		html.EscapeString(renderer.dimensionText),
 	)
-	for _, caveat := range reliabilityCaveats(report) {
+	for _, caveat := range renderer.caveats {
 		fmt.Fprintf(
 			writer, `<p class="uncertain">Reliability: %s.</p>`,
 			html.EscapeString(caveat),
@@ -81,14 +86,14 @@ func writeHTML(writer io.Writer, report model.Report) error {
 	writeHTMLCommandLegend(writer, report)
 	writeHTMLFailures(writer, report)
 	if len(report.Benchmarks) > 1 {
-		writeHTMLRanking(writer, report)
+		writeHTMLRankingWith(writer, report, renderer.ranking)
 	}
-	charts := reportCharts(report)
+	charts := renderer.reportCharts()
 	for _, section := range chartSections(charts) {
 		writeHTMLChartSection(writer, section.title, section.charts)
 	}
 	if len(report.Benchmarks) > 1 {
-		writeHTMLComparison(writer, report)
+		writeHTMLComparison(writer, renderer)
 	}
 	fmt.Fprint(writer, "<h2>Statistical detail</h2>")
 	for index, benchmark := range report.Benchmarks {
@@ -177,9 +182,11 @@ func writeHTMLChartColumn(writer io.Writer, charts []svgChart) {
 			`<div class="chart"><div class="chart-frame">`+
 				`<button type="button" class="chart-help" `+
 				`aria-label="%s" title="%s">?</button>`+
-				`<div class="chart-tooltip" role="tooltip">%s</div>%s</div></div>`,
-			label, explanation, explanation, chart.html(),
+				`<div class="chart-tooltip" role="tooltip">%s</div>`,
+			label, explanation, explanation,
 		)
+		chart.writeHTML(writer)
+		fmt.Fprint(writer, `</div></div>`)
 	}
 	fmt.Fprint(writer, "</div>")
 }

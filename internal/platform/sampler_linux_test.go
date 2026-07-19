@@ -3,6 +3,7 @@
 package platform
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -68,5 +69,31 @@ func TestSampleTreeIncludesReparentedProcessGroupMembers(t *testing.T) {
 	metrics, valid := SampleTree(cmd.Process.Pid)
 	if !valid || metrics.Processes < 2 {
 		t.Fatalf("group metrics = %+v, valid = %v", metrics, valid)
+	}
+}
+
+func TestParseProcessStatValidatesRequiredNumbers(t *testing.T) {
+	fields := make([]string, 22)
+	for index := range fields {
+		fields[index] = "0"
+	}
+	fields[0], fields[1], fields[2] = "S", "42", "123"
+	fields[17], fields[20], fields[21] = "7", "4096", "2"
+	data := []byte(fmt.Sprintf("99 (name with ) parenthesis) %s", strings.Join(fields, " ")))
+	process, err := parseProcessStat(data, 99)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if process.PPID != 42 || process.GroupID != 123 || process.Threads != 7 ||
+		process.VirtualBytes != 4096 || process.ResidentBytes == 0 {
+		t.Fatalf("parsed process = %+v", process)
+	}
+	for _, field := range []int{1, 2, 17, 20, 21} {
+		invalid := append([]string(nil), fields...)
+		invalid[field] = "invalid"
+		data = []byte(fmt.Sprintf("99 (name) %s", strings.Join(invalid, " ")))
+		if _, err := parseProcessStat(data, 99); err == nil {
+			t.Fatalf("field %d should reject malformed input", field)
+		}
 	}
 }

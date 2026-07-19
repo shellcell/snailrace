@@ -7,8 +7,7 @@ import (
 	"github.com/shellcell/snailrace/internal/model"
 )
 
-func includedDimensions(report model.Report) []string {
-	ranking := calculateRanking(report)
+func includedDimensionsFromRanking(ranking rankingData) []string {
 	var result []string
 	if ranking.indexPrimary {
 		result = append(result, "time")
@@ -25,8 +24,7 @@ func includedDimensions(report model.Report) []string {
 	return result
 }
 
-func includedDimensionsText(report model.Report) string {
-	dimensions := includedDimensions(report)
+func dimensionsText(dimensions []string) string {
 	if len(dimensions) == 0 {
 		return "none"
 	}

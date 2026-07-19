@@ -15,6 +15,9 @@ func staticCostChart(
 	pick func(model.Benchmark) float64,
 	format func(float64) string,
 ) svgChart {
+	if len(report.Benchmarks) == 0 {
+		return svgChart{}
+	}
 	maximum := 0.0
 	for _, benchmark := range report.Benchmarks {
 		value := pick(benchmark)

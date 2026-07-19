@@ -6,7 +6,6 @@ import (
 	"math"
 	"strings"
 
-	"github.com/shellcell/snailrace/internal/analysis"
 	"github.com/shellcell/snailrace/internal/model"
 )
 
@@ -16,7 +15,7 @@ type tradeoffMetric struct {
 	value  func(model.Benchmark) float64
 }
 
-func tradeoffCharts(report model.Report) []svgChart {
+func tradeoffCharts(report model.Report, ranking rankingData) []svgChart {
 	if len(report.Benchmarks) < 2 {
 		return nil
 	}
@@ -37,13 +36,13 @@ func tradeoffCharts(report model.Report) []svgChart {
 		if mean <= 0 || peak <= 0 {
 			return 0
 		}
-		return math.Sqrt(mean * peak)
+		return math.Sqrt(mean) * math.Sqrt(peak)
 	}}
 	linked := tradeoffMetric{"Linked size", formatBytes, func(b model.Benchmark) float64 {
 		return float64(b.Tool.DiskFootprintBytes)
 	}}
 	pairs := [][2]tradeoffMetric{{primary, cpu}, {primary, linked}}
-	if analysis.Calculate(report.Config, report.Benchmarks).RAMAvailable {
+	if ranking.ramAvailable {
 		pairs = append(pairs, [2]tradeoffMetric{primary, ram}, [2]tradeoffMetric{cpu, ram})
 	}
 	charts := make([]svgChart, 0, len(pairs))
@@ -57,8 +56,13 @@ func tradeoffChart(report model.Report, xMetric, yMetric tradeoffMetric) svgChar
 	const left, top, plotWidth, plotHeight = 62, 62, 390, 240
 	xMaximum, yMaximum := 0.0, 0.0
 	for _, benchmark := range report.Benchmarks {
-		xMaximum = math.Max(xMaximum, xMetric.value(benchmark))
-		yMaximum = math.Max(yMaximum, yMetric.value(benchmark))
+		xValue, yValue := xMetric.value(benchmark), yMetric.value(benchmark)
+		if !finiteChartValue(xValue) || !finiteChartValue(yValue) ||
+			xValue < 0 || yValue < 0 {
+			return svgChart{}
+		}
+		xMaximum = math.Max(xMaximum, xValue)
+		yMaximum = math.Max(yMaximum, yValue)
 	}
 	if xMaximum <= 0 {
 		xMaximum = 1

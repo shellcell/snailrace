@@ -19,6 +19,11 @@ type forestRow struct {
 }
 
 func deltaForestChart(report model.Report, group chartGroup) svgChart {
+	return deltaForestChartWith(NewRenderer(report), group)
+}
+
+func deltaForestChartWith(renderer *Renderer, group chartGroup) svgChart {
+	report := renderer.report
 	baselinePosition := baselineIndex(report)
 	baseline := report.Benchmarks[baselinePosition]
 	rows := make([]forestRow, 0)
@@ -35,6 +40,13 @@ func deltaForestChart(report model.Report, group chartGroup) svgChart {
 		}
 		baseStats := metric.stats(baseline)
 		baseMean := baseStats.Mean
+		if baseStats.N == 0 || !finiteChartValue(baseMean) {
+			rows = append(rows, forestRow{
+				label: metric.name, status: "N/A", class: "neutral",
+				identity: toolColor(report, baselinePosition), baseline: true,
+			})
+			continue
+		}
 		baselineRow := forestRow{
 			label:  metric.name + " · " + reportToolLabel(report, baselinePosition),
 			status: metric.format(baseMean) + " · baseline",
@@ -43,8 +55,13 @@ func deltaForestChart(report model.Report, group chartGroup) svgChart {
 		}
 		if baseMean != 0 && baseStats.CI95Valid {
 			baselineRow.low, baselineRow.high = percentInterval(baseStats.CI95Low, baseStats.CI95High, baseMean)
-			baselineRow.interval = true
-			maximum = math.Max(maximum, math.Max(math.Abs(baselineRow.low), math.Abs(baselineRow.high)))
+			baselineRow.interval = finiteChartValue(baselineRow.low) &&
+				finiteChartValue(baselineRow.high)
+			if baselineRow.interval {
+				maximum = math.Max(
+					maximum, math.Max(math.Abs(baselineRow.low), math.Abs(baselineRow.high)),
+				)
+			}
 		}
 		rows = append(rows, baselineRow)
 		if baseMean == 0 {
@@ -60,9 +77,7 @@ func deltaForestChart(report model.Report, group chartGroup) svgChart {
 					continue
 				}
 				value := metric.stats(candidate).Mean
-				delta := compareMetric(
-					baseline, candidate, row, report.Config.IntervalMS/1000,
-				)
+				delta := renderer.comparison(index, metric.row)
 				rows = append(rows, forestRow{
 					label:  metric.name + " · " + candidate.Tool.Name,
 					status: metric.format(value) + " · Δ% n/a · " + delta.status,
@@ -83,18 +98,25 @@ func deltaForestChart(report model.Report, group chartGroup) svgChart {
 				})
 				continue
 			}
-			delta := compareMetric(
-				baseline, candidate, row, report.Config.IntervalMS/1000,
-			)
-			low := delta.difference.CI95Low / baseMean * 100
-			high := delta.difference.CI95High / baseMean * 100
-			maximum = math.Max(maximum, math.Max(math.Abs(low), math.Abs(high)))
-			maximum = math.Max(maximum, math.Abs(delta.percent))
+			delta := renderer.comparison(index, metric.row)
+			low, high := 0.0, 0.0
+			interval := delta.difference.CI95Valid
+			if interval {
+				low = delta.difference.CI95Low / baseMean * 100
+				high = delta.difference.CI95High / baseMean * 100
+				interval = finiteChartValue(low) && finiteChartValue(high)
+			}
+			if interval {
+				maximum = math.Max(maximum, math.Max(math.Abs(low), math.Abs(high)))
+			}
+			if delta.percentAvailable {
+				maximum = math.Max(maximum, math.Abs(delta.percent))
+			}
 			rows = append(rows, forestRow{
 				label: metric.name + " · " + candidate.Tool.Name,
 				point: delta.percent, low: low, high: high,
 				status: delta.status, class: delta.class,
-				identity: toolColor(report, index), interval: delta.difference.CI95Valid,
+				identity: toolColor(report, index), interval: interval,
 			})
 		}
 	}

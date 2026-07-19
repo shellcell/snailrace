@@ -8,7 +8,8 @@ import (
 	"github.com/shellcell/snailrace/internal/model"
 )
 
-func writeHTMLComparison(writer io.Writer, report model.Report) {
+func writeHTMLComparison(writer io.Writer, renderer *Renderer) {
+	report := renderer.report
 	baselinePosition := baselineIndex(report)
 	baseline := report.Benchmarks[baselinePosition]
 	fmt.Fprintf(
@@ -35,10 +36,10 @@ func writeHTMLComparison(writer io.Writer, report model.Report) {
 			`<thead><tr><th>Metric</th><th>Baseline mean</th>`+
 			`<th>Candidate mean</th><th>Δ mean</th></tr></thead><tbody>`)
 		writeHTMLStaticFootprint(writer, baseline, candidate)
-		for _, row := range metricRows {
+		for metric, row := range metricRows {
 			writeHTMLComparisonRow(
-				writer, report.Host.OS, report.Config.IntervalMS/1000,
-				baseline, candidate, row,
+				writer, report.Host.OS, baseline, candidate, row,
+				renderer.comparison(index, metric),
 			)
 		}
 		fmt.Fprint(writer, "</tbody></table></div>")
@@ -72,15 +73,14 @@ func writeHTMLStaticFootprint(
 func writeHTMLComparisonRow(
 	writer io.Writer,
 	operatingSystem string,
-	intervalSeconds float64,
 	baseline, candidate model.Benchmark,
 	row metricRow,
+	delta deltaResult,
 ) {
 	if !availableFor(row, operatingSystem, baseline.Summary, candidate.Summary) {
 		fmt.Fprintf(writer, "<tr><td>%s</td><td colspan=\"3\">N/A</td></tr>", row.name)
 		return
 	}
-	delta := compareMetric(baseline, candidate, row, intervalSeconds)
 	fmt.Fprintf(
 		writer,
 		`<tr><td>%s</td><td class="neutral">%s</td><td class="%s">%s</td>`+

@@ -3,11 +3,10 @@ package report
 import (
 	"fmt"
 	"io"
-
-	"github.com/shellcell/snailrace/internal/model"
 )
 
-func writeTextComparison(writer io.Writer, report model.Report) {
+func writeTextComparison(writer io.Writer, renderer *Renderer) {
+	report := renderer.report
 	baselinePosition := baselineIndex(report)
 	baseline := report.Benchmarks[baselinePosition]
 	for index, candidate := range report.Benchmarks {
@@ -31,16 +30,14 @@ func writeTextComparison(writer io.Writer, report model.Report) {
 			formatBytes(float64(baseline.Tool.DiskFootprintBytes)),
 			formatBytes(float64(candidate.Tool.DiskFootprintBytes)), staticDelta,
 		)
-		for _, row := range metricRows {
+		for metric, row := range metricRows {
 			if !availableFor(
 				row, report.Host.OS, baseline.Summary, candidate.Summary,
 			) {
 				fmt.Fprintf(writer, "%s\tN/A\tN/A\tN/A\tN/A\n", row.name)
 				continue
 			}
-			delta := compareMetric(
-				baseline, candidate, row, report.Config.IntervalMS/1000,
-			)
+			delta := renderer.comparison(index, metric)
 			fmt.Fprintf(
 				writer, "%s\t%s\t%s\t%s\t%s\n", row.name,
 				row.format(delta.baselineMean), row.format(delta.candidateMean),

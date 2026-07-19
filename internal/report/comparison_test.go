@@ -101,6 +101,19 @@ func TestPhysicalFootprintComparisonExcludesInvalidPairs(t *testing.T) {
 	}
 }
 
+func TestComparisonDropsPairWithNonFiniteValue(t *testing.T) {
+	baselineRuns := []model.Run{{Index: 1, WallSeconds: 1}}
+	candidateRuns := []model.Run{{Index: 1, WallSeconds: math.NaN()}}
+	result := compareMetric(
+		model.Benchmark{Runs: baselineRuns, Summary: model.Summarize(baselineRuns)},
+		model.Benchmark{Runs: candidateRuns, Summary: model.Summarize(candidateRuns)},
+		metricRows[0], 0,
+	)
+	if result.difference.N != 0 || result.percentAvailable {
+		t.Fatalf("non-finite pair produced a comparison: %+v", result)
+	}
+}
+
 func benchmarkWithWallTimes(name string, values ...float64) model.Benchmark {
 	runs := make([]model.Run, len(values))
 	for index, value := range values {

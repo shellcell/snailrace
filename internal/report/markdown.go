@@ -8,17 +8,21 @@ import (
 	"github.com/shellcell/snailrace/internal/model"
 )
 
-func writeMarkdown(writer io.Writer, report model.Report) error {
-	return WriteMarkdownWithCharts(writer, report, nil, "")
-}
-
 func WriteMarkdownWithCharts(
 	writer io.Writer,
 	report model.Report,
 	charts []ChartArtifact,
 	chartDirectory string,
 ) error {
-	report = safeDisplayReport(report)
+	return NewRenderer(report).WriteMarkdownWithCharts(writer, charts, chartDirectory)
+}
+
+func (renderer *Renderer) WriteMarkdownWithCharts(
+	writer io.Writer,
+	charts []ChartArtifact,
+	chartDirectory string,
+) error {
+	report := renderer.report
 	checked := newErrorWriter(writer)
 	writer = checked
 	fmt.Fprintf(
@@ -31,19 +35,19 @@ func WriteMarkdownWithCharts(
 	)
 	fmt.Fprintf(
 		writer, "Balanced index dimensions actually included: **%s**.\n\n",
-		escapeMarkdown(includedDimensionsText(report)),
+		escapeMarkdown(renderer.dimensionText),
 	)
-	for _, caveat := range reliabilityCaveats(report) {
+	for _, caveat := range renderer.caveats {
 		fmt.Fprintf(writer, "> Reliability: %s.\n\n", escapeMarkdown(caveat))
 	}
 	writeMarkdownCommandLegend(writer, report)
 	writeMarkdownFailures(writer, report)
 	if len(report.Benchmarks) > 1 {
-		writeMarkdownRanking(writer, report)
+		writeMarkdownRankingWith(writer, report, renderer.ranking)
 	}
 	writeMarkdownCharts(writer, charts, chartDirectory)
 	if len(report.Benchmarks) > 1 {
-		writeMarkdownComparison(writer, report)
+		writeMarkdownComparison(writer, renderer)
 	}
 	fmt.Fprintln(writer, "## Statistical Detail")
 	for index, benchmark := range report.Benchmarks {

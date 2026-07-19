@@ -18,6 +18,18 @@ func saveReportFormats(
 	formats []string,
 	result model.Report,
 ) error {
+	return saveReportFormatsRenderer(
+		stderr, directory, formats, result, report.NewRenderer(result),
+	)
+}
+
+func saveReportFormatsRenderer(
+	stderr io.Writer,
+	directory string,
+	formats []string,
+	result model.Report,
+	renderer *report.Renderer,
+) error {
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return err
 	}
@@ -40,8 +52,8 @@ func saveReportFormats(
 	finalBundle := filepath.Join(directory, stem)
 	if needsCharts {
 		chartDirectory := filepath.Join(stagedBundle, "charts")
-		charts, err = report.WriteChartFiles(
-			chartDirectory, result, containsFormat(formats, "svg"),
+		charts, err = renderer.WriteChartFiles(
+			chartDirectory, containsFormat(formats, "svg"),
 		)
 		if err != nil {
 			return err
@@ -56,13 +68,13 @@ func saveReportFormats(
 			announcements = append(announcements, filepath.Join(finalBundle, "charts"))
 		case "markdown":
 			path := filepath.Join(stagedBundle, "report.md")
-			if err := writeMarkdownFile(path, result, charts); err != nil {
+			if err := writeMarkdownFile(path, renderer, charts); err != nil {
 				return err
 			}
 			announcements = append(announcements, filepath.Join(finalBundle, "report.md"))
 		default:
 			stagedPath := reportPathWithStem(staging, format, stem)
-			if err := writeReportFile(stagedPath, format, result); err != nil {
+			if err := writeReportFile(stagedPath, format, renderer); err != nil {
 				return err
 			}
 			finalPath := reportPathWithStem(directory, format, stem)
@@ -136,7 +148,7 @@ func reportStemExists(directory, stem string) bool {
 
 func writeMarkdownFile(
 	path string,
-	result model.Report,
+	renderer *report.Renderer,
 	charts []report.ChartArtifact,
 ) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -146,7 +158,7 @@ func writeMarkdownFile(
 	if err != nil {
 		return err
 	}
-	writeErr := report.WriteMarkdownWithCharts(file, result, charts, "charts")
+	writeErr := renderer.WriteMarkdownWithCharts(file, charts, "charts")
 	syncErr := error(nil)
 	if writeErr == nil {
 		syncErr = file.Sync()
@@ -155,12 +167,12 @@ func writeMarkdownFile(
 	return errors.Join(writeErr, syncErr, closeErr)
 }
 
-func writeReportFile(path, format string, result model.Report) error {
+func writeReportFile(path, format string, renderer *report.Renderer) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return err
 	}
-	writeErr := report.Write(file, format, result)
+	writeErr := renderer.Write(file, format)
 	syncErr := error(nil)
 	if writeErr == nil {
 		syncErr = file.Sync()

@@ -83,6 +83,16 @@ func validateLabels(labels, commands []string) error {
 	if len(labels) == 0 {
 		return nil
 	}
+	seen := make(map[string]bool, len(labels))
+	for _, label := range labels {
+		if strings.TrimSpace(label) == "" {
+			return errors.New("labels cannot be empty")
+		}
+		if seen[label] {
+			return fmt.Errorf("duplicate label %q", label)
+		}
+		seen[label] = true
+	}
 	if len(commands) > 0 {
 		if len(labels) != len(commands) {
 			return errors.New("label count must match command count")

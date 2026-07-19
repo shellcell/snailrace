@@ -54,9 +54,12 @@ func parseOtool(output []byte) []string {
 	lines := strings.Split(string(output), "\n")
 	result := make([]string, 0, len(lines))
 	for _, line := range lines[1:] {
-		fields := strings.Fields(line)
-		if len(fields) > 0 {
-			result = append(result, fields[0])
+		line = strings.TrimSpace(line)
+		if metadata := strings.LastIndex(line, " (compatibility version "); metadata >= 0 {
+			line = line[:metadata]
+		}
+		if line != "" {
+			result = append(result, line)
 		}
 	}
 	return result
@@ -79,9 +82,12 @@ func loadRPaths(ctx context.Context, path, executable, loader string) []string {
 		if !wantPath || !strings.HasPrefix(line, "path ") {
 			continue
 		}
-		fields := strings.Fields(line)
-		if len(fields) >= 2 {
-			result = append(result, expandDylibPath(fields[1], executable, loader))
+		path := strings.TrimSpace(strings.TrimPrefix(line, "path "))
+		if metadata := strings.LastIndex(path, " (offset "); metadata >= 0 {
+			path = path[:metadata]
+		}
+		if path != "" {
+			result = append(result, expandDylibPath(path, executable, loader))
 		}
 		wantPath = false
 	}

@@ -18,7 +18,10 @@ type rankingChartMetric struct {
 }
 
 func rankingCharts(report model.Report) []svgChart {
-	ranking := calculateRanking(report)
+	return rankingChartsWith(report, calculateRanking(report))
+}
+
+func rankingChartsWith(report model.Report, ranking rankingData) []svgChart {
 	if len(ranking.rows) == 0 {
 		return nil
 	}
@@ -65,12 +68,14 @@ func rankingCharts(report model.Report) []svgChart {
 
 func rankByValue(rows []rankingRow, value func(rankingRow) float64) map[int]int {
 	result := make(map[int]int, len(rows))
-	for _, row := range rows {
-		rank := 1
-		for _, other := range rows {
-			if value(other) < value(row) {
-				rank++
-			}
+	ordered := append([]rankingRow(nil), rows...)
+	sort.SliceStable(ordered, func(left, right int) bool {
+		return value(ordered[left]) < value(ordered[right])
+	})
+	rank := 0
+	for position, row := range ordered {
+		if position == 0 || value(row) != value(ordered[position-1]) {
+			rank = position + 1
 		}
 		result[row.benchmark] = rank
 	}
@@ -85,7 +90,11 @@ func rankingBarChart(
 	const left, plotWidth, rowHeight = 205, 355, 30
 	maximum := 0.0
 	for _, row := range ranking.rows {
-		maximum = math.Max(maximum, metric.value(row))
+		value := metric.value(row)
+		if !finiteChartValue(value) || value < 0 {
+			return svgChart{}
+		}
+		maximum = math.Max(maximum, value)
 	}
 	if maximum <= 0 {
 		maximum = 1

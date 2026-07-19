@@ -67,42 +67,80 @@ func Summarize(runs []Run) Summary {
 
 func CalculateStats(values []float64) Stats { return stats(values) }
 
+type RunningStats struct {
+	values  []float64
+	moments statsMoments
+}
+
+func NewRunningStats(capacity int) RunningStats {
+	return RunningStats{values: make([]float64, 0, capacity)}
+}
+
+func (running *RunningStats) Add(value float64) {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return
+	}
+	position := sort.SearchFloat64s(running.values, value)
+	running.values = append(running.values, 0)
+	copy(running.values[position+1:], running.values[position:])
+	running.values[position] = value
+	running.moments.add(value)
+}
+
+func (running RunningStats) Snapshot() Stats {
+	return statsFromSorted(running.values, running.moments)
+}
+
 func stats(values []float64) Stats {
 	finite := make([]float64, 0, len(values))
+	var moments statsMoments
 	for _, value := range values {
 		if !math.IsNaN(value) && !math.IsInf(value, 0) {
 			finite = append(finite, value)
+			moments.add(value)
 		}
 	}
 	if len(finite) == 0 {
 		return Stats{}
 	}
-	sorted := append([]float64(nil), finite...)
-	sort.Float64s(sorted)
-	mean := 0.0
-	m2 := 0.0
-	varianceOverflow := false
-	for index, value := range sorted {
-		count := float64(index + 1)
-		previousMean := mean
-		mean = previousMean*(1-1/count) + value/count
-		if math.IsInf(mean, 0) {
-			mean = math.Copysign(math.MaxFloat64, mean)
-		}
-		delta := value - previousMean
-		term := delta * (value - mean)
-		if math.IsInf(term, 0) || math.IsNaN(term) || math.MaxFloat64-m2 < term {
-			varianceOverflow = true
-			m2 = math.MaxFloat64
-		} else if term > 0 {
-			m2 += term
-		}
+	sort.Float64s(finite)
+	return statsFromSorted(finite, moments)
+}
+
+type statsMoments struct {
+	count            int
+	mean             float64
+	m2               float64
+	varianceOverflow bool
+}
+
+func (moments *statsMoments) add(value float64) {
+	moments.count++
+	count := float64(moments.count)
+	previousMean := moments.mean
+	moments.mean = previousMean*(1-1/count) + value/count
+	if math.IsInf(moments.mean, 0) {
+		moments.mean = math.Copysign(math.MaxFloat64, moments.mean)
+	}
+	delta := value - previousMean
+	term := delta * (value - moments.mean)
+	if math.IsInf(term, 0) || math.IsNaN(term) || math.MaxFloat64-moments.m2 < term {
+		moments.varianceOverflow = true
+		moments.m2 = math.MaxFloat64
+	} else if term > 0 {
+		moments.m2 += term
+	}
+}
+
+func statsFromSorted(sorted []float64, moments statsMoments) Stats {
+	if len(sorted) == 0 {
+		return Stats{}
 	}
 	standardDeviation := 0.0
-	if len(sorted) > 1 && varianceOverflow {
+	if len(sorted) > 1 && moments.varianceOverflow {
 		standardDeviation = math.MaxFloat64
 	} else if len(sorted) > 1 {
-		standardDeviation = math.Sqrt(m2 / float64(len(sorted)-1))
+		standardDeviation = math.Sqrt(moments.m2 / float64(len(sorted)-1))
 	}
 	margin := 0.0
 	validInterval := len(sorted) > 1
@@ -114,10 +152,10 @@ func stats(values []float64) Stats {
 		}
 	}
 	return Stats{
-		N: len(sorted), Min: sorted[0], Max: sorted[len(sorted)-1], Mean: mean,
+		N: len(sorted), Min: sorted[0], Max: sorted[len(sorted)-1], Mean: moments.mean,
 		StdDev: standardDeviation, Median: percentile(sorted, 0.5),
-		P95: percentile(sorted, 0.95), CI95Low: finiteDifference(mean, margin),
-		CI95High: finiteSum(mean, margin), CI95Valid: validInterval,
+		P95: percentile(sorted, 0.95), CI95Low: finiteDifference(moments.mean, margin),
+		CI95High: finiteSum(moments.mean, margin), CI95Valid: validInterval,
 	}
 }
 

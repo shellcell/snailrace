@@ -19,6 +19,16 @@ func TestParseOtool(t *testing.T) {
 	}
 }
 
+func TestParseOtoolPreservesPathsWithSpaces(t *testing.T) {
+	output := []byte("/tmp/tool:\n" +
+		"\t/Applications/My Tool/lib helper.dylib " +
+		"(compatibility version 1.0.0, current version 1.0.0)\n")
+	want := []string{"/Applications/My Tool/lib helper.dylib"}
+	if got := parseOtool(output); !reflect.DeepEqual(got, want) {
+		t.Fatalf("dependencies = %#v, want %#v", got, want)
+	}
+}
+
 func TestResolveDylibUsesRPathAndIdentifiesSharedCache(t *testing.T) {
 	directory := t.TempDir()
 	library := filepath.Join(directory, "liblocal.dylib")

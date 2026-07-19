@@ -199,15 +199,23 @@ func applyRanks(
 	for _, row := range rows {
 		overall[row.Benchmark] = row.OverallScore
 	}
+	overallRanks := make([]int, len(eligible))
+	if overallAvailable {
+		overallRanks = ranks(overall, eligible)
+	}
+	primaryRanks := ranks(primary, eligible)
+	cpuRanks := ranks(cpu, eligible)
+	ramRanks := ranks(ram, eligible)
+	footprintRanks := ranks(footprint, eligible)
 	for index := range rows {
 		benchmark := rows[index].Benchmark
 		if overallAvailable {
-			rows[index].OverallRank = rankOf(overall, benchmark, eligible)
+			rows[index].OverallRank = overallRanks[benchmark]
 		}
-		rows[index].PrimaryRank = rankOf(primary, benchmark, eligible)
-		rows[index].CPURank = rankOf(cpu, benchmark, eligible)
-		rows[index].RAMRank = rankOf(ram, benchmark, eligible)
-		rows[index].FootprintRank = rankOf(footprint, benchmark, eligible)
+		rows[index].PrimaryRank = primaryRanks[benchmark]
+		rows[index].CPURank = cpuRanks[benchmark]
+		rows[index].RAMRank = ramRanks[benchmark]
+		rows[index].FootprintRank = footprintRanks[benchmark]
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
 		if !overallAvailable {

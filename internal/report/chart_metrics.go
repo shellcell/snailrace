@@ -3,13 +3,21 @@ package report
 import "github.com/shellcell/snailrace/internal/model"
 
 func reportCharts(report model.Report) []svgChart {
-	groups := chartGroups(report)
+	return NewRenderer(report).reportCharts()
+}
+
+func buildReportCharts(renderer *Renderer) []svgChart {
+	report := renderer.report
+	if len(report.Benchmarks) == 0 {
+		return nil
+	}
+	groups := renderer.groups
 	var charts []svgChart
 	if len(report.Benchmarks) > 1 {
-		charts = append(charts, rankingCharts(report)...)
+		charts = append(charts, rankingChartsWith(report, renderer.ranking)...)
 		for _, group := range groups {
 			for _, metric := range group.metrics {
-				chart := deltaForestChart(report, chartGroup{
+				chart := deltaForestChartWith(renderer, chartGroup{
 					name: metric.name, metrics: []chartMetric{metric},
 				})
 				if chart.height > 0 {
@@ -17,7 +25,7 @@ func reportCharts(report model.Report) []svgChart {
 				}
 			}
 		}
-		charts = append(charts, tradeoffCharts(report)...)
+		charts = append(charts, tradeoffCharts(report, renderer.ranking)...)
 	}
 	for _, group := range groups {
 		for _, metric := range group.metrics {
@@ -34,7 +42,7 @@ func reportCharts(report model.Report) []svgChart {
 	); chart.height > 0 {
 		charts = append(charts, chart)
 	}
-	charts = append(charts, measurementTrendCharts(report)...)
+	charts = append(charts, measurementTrendCharts(report, groups)...)
 	return charts
 }
 
@@ -53,7 +61,8 @@ func chartGroups(report model.Report) []chartGroup {
 }
 
 func chartRunAvailable(metric chartMetric, run model.Run) bool {
-	return metric.row != 8 || run.PhysicalFootprintValid
+	return (metric.row != 8 || run.PhysicalFootprintValid) &&
+		finiteChartValue(metric.run(run))
 }
 
 func chartMetricDefinitions() []chartMetric {

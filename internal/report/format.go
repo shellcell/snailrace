@@ -92,6 +92,9 @@ func formatSignedPercent(value float64) string {
 }
 
 func formatNumber(value float64) string {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return "N/A"
+	}
 	if value == 0 {
 		return "0"
 	}

@@ -2,6 +2,7 @@ package analysis
 
 import (
 	"math"
+	"sort"
 
 	"github.com/shellcell/snailrace/internal/model"
 )
@@ -107,15 +108,27 @@ func allPositive(values []float64, eligible []bool) bool {
 	return found
 }
 
-func rankOf(values []float64, target int, eligible []bool) int {
-	if !eligible[target] || math.IsInf(values[target], 0) || math.IsNaN(values[target]) {
-		return 0
+func ranks(values []float64, eligible []bool) []int {
+	type item struct {
+		index int
+		value float64
 	}
-	rank := 1
+	items := make([]item, 0, len(values))
 	for index, value := range values {
-		if index != target && eligible[index] && value < values[target] {
-			rank++
+		if eligible[index] && !math.IsInf(value, 0) && !math.IsNaN(value) {
+			items = append(items, item{index: index, value: value})
 		}
 	}
-	return rank
+	sort.SliceStable(items, func(left, right int) bool {
+		return items[left].value < items[right].value
+	})
+	result := make([]int, len(values))
+	rank := 0
+	for position, current := range items {
+		if position == 0 || current.value != items[position-1].value {
+			rank = position + 1
+		}
+		result[current.index] = rank
+	}
+	return result
 }

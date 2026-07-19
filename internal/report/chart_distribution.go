@@ -21,8 +21,13 @@ func absoluteDistributionChart(report model.Report, metric chartMetric) svgChart
 	minimum, maximum := 0.0, 0.0
 	for _, benchmark := range report.Benchmarks {
 		stats := metric.stats(benchmark)
+		if stats.N == 0 || !finiteChartValue(stats.Min) ||
+			!finiteChartValue(stats.Max) || !finiteChartValue(stats.Mean) {
+			return svgChart{}
+		}
 		maximum = math.Max(maximum, stats.Max)
-		if stats.CI95Valid {
+		if stats.CI95Valid && finiteChartValue(stats.CI95Low) &&
+			finiteChartValue(stats.CI95High) {
 			minimum = math.Min(minimum, stats.CI95Low)
 			maximum = math.Max(maximum, stats.CI95High)
 		}
@@ -36,6 +41,11 @@ func absoluteDistributionChart(report model.Report, metric chartMetric) svgChart
 		return left + (value-minimum)/(maximum-minimum)*plotWidth
 	}
 	var body strings.Builder
+	points := 0
+	for _, benchmark := range report.Benchmarks {
+		points += len(benchmark.Runs)
+	}
+	body.Grow(1024 + len(report.Benchmarks)*384 + points*96)
 	body.WriteString(svgChartStyle)
 	fmt.Fprintf(
 		&body,
@@ -66,15 +76,18 @@ func absoluteDistributionChart(report model.Report, metric chartMetric) svgChart
 				continue
 			}
 			jitter := (runIndex%3 - 1) * 5
-			fmt.Fprintf(
-				&body, `<circle class="run-dot" cx="%.1f" cy="%d" `+
-					`r="1.75" fill="%s" opacity=".65"/>`,
-				position(metric.run(run)), y-4+jitter, color,
-			)
+			body.WriteString(`<circle class="run-dot" cx="`)
+			writeChartFloat(&body, position(metric.run(run)))
+			body.WriteString(`" cy="`)
+			writeChartInt(&body, y-4+jitter)
+			body.WriteString(`" r="1.75" fill="`)
+			body.WriteString(color)
+			body.WriteString(`" opacity=".65"/>`)
 		}
 		stats := metric.stats(benchmark)
 		mean := position(stats.Mean)
-		if stats.CI95Valid {
+		if stats.CI95Valid && finiteChartValue(stats.CI95Low) &&
+			finiteChartValue(stats.CI95High) {
 			low, high := position(stats.CI95Low), position(stats.CI95High)
 			fmt.Fprintf(
 				&body,

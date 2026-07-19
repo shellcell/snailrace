@@ -16,11 +16,10 @@ type trendLane struct {
 	format  func(float64) string
 }
 
-func measurementTrendCharts(report model.Report) []svgChart {
+func measurementTrendCharts(report model.Report, groups []chartGroup) []svgChart {
 	if len(report.Benchmarks) == 0 {
 		return nil
 	}
-	groups := chartGroups(report)
 	charts := make([]svgChart, 0, len(report.Benchmarks)*len(groups))
 	for benchmarkIndex, benchmark := range report.Benchmarks {
 		if len(benchmark.Runs) < 2 {
@@ -48,6 +47,11 @@ func measurementTrendChart(report model.Report, benchmarkIndex int, group chartG
 		return left + float64(index)/float64(len(runs)-1)*(right-left)
 	}
 	var body strings.Builder
+	metricCount := 0
+	for _, lane := range lanes {
+		metricCount += len(lane.metrics)
+	}
+	body.Grow(1536 + len(runs)*metricCount*96)
 	toolLabel := reportToolLabel(report, benchmarkIndex)
 	toolColorHex := toolColor(report, benchmarkIndex)
 	body.WriteString(svgChartStyle)
@@ -92,9 +96,10 @@ func measurementTrendChart(report model.Report, benchmarkIndex int, group chartG
 			minimum, maximum := valueRange(values)
 			color := style.Tool(metric.row).Hex
 			var path strings.Builder
+			path.Grow(len(values) * 20)
 			started := false
 			for index, value := range values {
-				if math.IsNaN(value) {
+				if !finiteChartValue(value) {
 					started = false
 					continue
 				}
@@ -102,7 +107,12 @@ func measurementTrendChart(report model.Report, benchmarkIndex int, group chartG
 				if !started {
 					command = "M"
 				}
-				fmt.Fprintf(&path, "%s %.1f %.1f ", command, x(index), positionY(value))
+				path.WriteString(command)
+				path.WriteByte(' ')
+				writeChartFloat(&path, x(index))
+				path.WriteByte(' ')
+				writeChartFloat(&path, positionY(value))
+				path.WriteByte(' ')
 				started = true
 			}
 			fmt.Fprintf(
@@ -111,13 +121,16 @@ func measurementTrendChart(report model.Report, benchmarkIndex int, group chartG
 				path.String(), color,
 			)
 			for index, value := range values {
-				if math.IsNaN(value) {
+				if !finiteChartValue(value) {
 					continue
 				}
-				fmt.Fprintf(
-					&body, `<circle class="trend-dot" cx="%.1f" cy="%.1f" r="1.5" fill="%s"/>`,
-					x(index), positionY(value), color,
-				)
+				body.WriteString(`<circle class="trend-dot" cx="`)
+				writeChartFloat(&body, x(index))
+				body.WriteString(`" cy="`)
+				writeChartFloat(&body, positionY(value))
+				body.WriteString(`" r="1.5" fill="`)
+				body.WriteString(color)
+				body.WriteString(`"/>`)
 			}
 			legendY := top + 4 + metricIndex*26
 			fmt.Fprintf(
@@ -152,7 +165,7 @@ func trendValues(runs []model.Run, metric chartMetric) []float64 {
 func valueRange(values []float64) (float64, float64) {
 	minimum, maximum := math.Inf(1), math.Inf(-1)
 	for _, value := range values {
-		if math.IsNaN(value) {
+		if !finiteChartValue(value) {
 			continue
 		}
 		minimum = math.Min(minimum, value)
@@ -248,7 +261,8 @@ func trendMetrics(
 ) []chartMetric {
 	result := make([]chartMetric, 0, len(metrics))
 	for _, metric := range metrics {
-		if availableFor(
+		stats := metricRows[metric.row].stats(report.Benchmarks[benchmarkIndex].Summary)
+		if stats.N > 0 && finiteChartValue(stats.Mean) && availableFor(
 			metricRows[metric.row], report.Host.OS,
 			report.Benchmarks[benchmarkIndex].Summary,
 		) {

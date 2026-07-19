@@ -10,20 +10,21 @@ import (
 )
 
 func Write(writer io.Writer, format string, report model.Report) error {
-	if strings.ToLower(format) != "json" {
-		report = safeDisplayReport(report)
-	}
+	return NewRenderer(report).Write(writer, format)
+}
+
+func (renderer *Renderer) Write(writer io.Writer, format string) error {
 	switch strings.ToLower(format) {
 	case "text", "txt":
-		return writeText(writer, report)
+		return writeTextRenderer(writer, renderer)
 	case "json":
-		return writeJSON(writer, report)
+		return writeJSONRenderer(writer, renderer)
 	case "markdown", "md":
-		return writeMarkdown(writer, report)
+		return renderer.WriteMarkdownWithCharts(writer, nil, "")
 	case "html":
-		return writeHTML(writer, report)
+		return writeHTMLRenderer(writer, renderer)
 	case "svg":
-		return writeSVG(writer, report)
+		return writeSVGRenderer(writer, renderer)
 	default:
 		return fmt.Errorf("unknown report format %q", format)
 	}

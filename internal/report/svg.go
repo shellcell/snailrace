@@ -22,12 +22,17 @@ const svgReportStyle = `<style>` +
 	`</style>`
 
 func writeSVG(writer io.Writer, report model.Report) error {
+	return writeSVGRenderer(writer, NewRenderer(report))
+}
+
+func writeSVGRenderer(writer io.Writer, renderer *Renderer) error {
+	report := renderer.report
 	checked := newErrorWriter(writer)
 	writer = checked
 	var content strings.Builder
-	y := svgHeader(&content, report)
+	y := svgHeader(&content, renderer)
 	y = svgCommandLegend(&content, report, y)
-	charts := reportCharts(report)
+	charts := renderer.reportCharts()
 	if failures := failureChart(report); failures.height > 0 {
 		charts = append([]svgChart{failures}, charts...)
 	}
@@ -45,8 +50,9 @@ func writeSVG(writer io.Writer, report model.Report) error {
 	return checked.Err()
 }
 
-func svgHeader(output *strings.Builder, report model.Report) int {
-	caveats := reliabilityCaveats(report)
+func svgHeader(output *strings.Builder, renderer *Renderer) int {
+	report := renderer.report
+	caveats := renderer.caveats
 	panelHeight := 96 + len(caveats)*22
 	nextSection := 254 + len(caveats)*22
 	if report.Config.Mode == "tui" {
@@ -82,7 +88,7 @@ func svgHeader(output *strings.Builder, report model.Report) int {
 	)
 	fmt.Fprintf(
 		output, `<text x="44" y="202" class="muted">balanced dimensions %s</text>`,
-		html.EscapeString(includedDimensionsText(report)),
+		html.EscapeString(renderer.dimensionText),
 	)
 	for index, caveat := range caveats {
 		fmt.Fprintf(
@@ -113,11 +119,11 @@ func svgCharts(output *strings.Builder, charts []svgChart, y int) int {
 	left, right := balanceCharts(charts)
 	leftY, rightY := y, y
 	for _, chart := range left {
-		output.WriteString(chart.embedded(24, leftY))
+		chart.writeEmbedded(output, 24, leftY)
 		leftY += chart.height + 16
 	}
 	for _, chart := range right {
-		output.WriteString(chart.embedded(756, rightY))
+		chart.writeEmbedded(output, 756, rightY)
 		rightY += chart.height + 16
 	}
 	if rightY > leftY {

@@ -43,7 +43,9 @@ func SampleTree(rootPID int) (Metrics, bool) {
 		var usage C.struct_rusage_info_v4
 		sampled := C.sample_process(pid, &task, &usage)
 		if sampled == 0 {
-			physicalFootprintValid = false
+			if syscall.Kill(int(pid), 0) == nil {
+				physicalFootprintValid = false
+			}
 			continue
 		}
 		if sampled < 2 {
@@ -69,15 +71,20 @@ func processGroupPIDs(groupID int) []C.pid_t {
 	if bytes <= 0 {
 		return nil
 	}
-	// Leave room for processes created between the sizing and data calls.
-	count := int(bytes) + 16
-	pids := make([]C.pid_t, count)
-	count = int(C.proc_listpgrppids(
-		C.pid_t(groupID), unsafe.Pointer(&pids[0]), C.int(len(pids))*C.sizeof_pid_t,
-	))
-	if count <= 0 {
-		return nil
+	// Leave room for process churn, and retry if the result fills the buffer.
+	capacity := int(bytes) + 16
+	for attempts := 0; attempts < 3; attempts++ {
+		pids := make([]C.pid_t, capacity)
+		count := int(C.proc_listpgrppids(
+			C.pid_t(groupID), unsafe.Pointer(&pids[0]), C.int(len(pids))*C.sizeof_pid_t,
+		))
+		if count <= 0 {
+			return nil
+		}
+		if count < len(pids) {
+			return pids[:count]
+		}
+		capacity *= 2
 	}
-	count = min(count, len(pids))
-	return pids[:count]
+	return nil
 }

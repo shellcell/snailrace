@@ -10,7 +10,10 @@ import (
 )
 
 func writeHTMLRanking(writer io.Writer, report model.Report) {
-	ranking := calculateRanking(report)
+	writeHTMLRankingWith(writer, report, calculateRanking(report))
+}
+
+func writeHTMLRankingWith(writer io.Writer, report model.Report, ranking rankingData) {
 	if len(ranking.rows) == 0 {
 		fmt.Fprintf(
 			writer, `<section><h2>Ranking unavailable</h2><p class="uncertain">%s</p></section>`,

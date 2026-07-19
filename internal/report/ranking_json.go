@@ -50,14 +50,19 @@ type jsonRanking struct {
 }
 
 func writeJSON(writer io.Writer, report model.Report) error {
+	return writeJSONRenderer(writer, NewRenderer(report))
+}
+
+func writeJSONRenderer(writer io.Writer, renderer *Renderer) error {
+	report := renderer.raw
 	payload := struct {
 		model.Report
 		Ranking     jsonRanking   `json:"ranking"`
 		Failures    []jsonFailure `json:"failures,omitempty"`
 		Reliability []string      `json:"reliability_caveats,omitempty"`
 	}{
-		Report: report, Ranking: makeJSONRanking(report),
-		Failures: makeJSONFailures(report), Reliability: reliabilityCaveats(report),
+		Report: report, Ranking: makeJSONRanking(report, renderer.ranking),
+		Failures: makeJSONFailures(report), Reliability: renderer.rawCaveats,
 	}
 	encoder := json.NewEncoder(writer)
 	encoder.SetIndent("", "  ")
@@ -77,13 +82,13 @@ func makeJSONFailures(report model.Report) []jsonFailure {
 	return result
 }
 
-func makeJSONRanking(report model.Report) jsonRanking {
-	ranking := calculateRanking(report)
+func makeJSONRanking(report model.Report, ranking rankingData) jsonRanking {
 	result := jsonRanking{
 		Available: ranking.available, UnavailableReason: ranking.unavailableReason,
 		Method: "equal-weight geometric mean of normalized category costs; included: " +
 			balancedIndexCategories(ranking),
-		PrimaryMetric: ranking.primaryLabel, IncludedDimensions: includedDimensions(report),
+		PrimaryMetric:      ranking.primaryLabel,
+		IncludedDimensions: append([]string(nil), includedDimensionsFromRanking(ranking)...),
 	}
 	for _, winner := range ranking.winners {
 		result.Winners = append(result.Winners, jsonWinner{

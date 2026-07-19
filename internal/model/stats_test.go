@@ -114,6 +114,19 @@ func TestStatsUnmarshalAcceptsLegacyConfidenceInterval(t *testing.T) {
 	}
 }
 
+func TestStatsUnmarshalRejectsSingleObservationInterval(t *testing.T) {
+	var decoded Stats
+	if err := json.Unmarshal(
+		[]byte(`{"n":1,"mean":3,"ci95_valid":true,"ci95_low":2,"ci95_high":4}`),
+		&decoded,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.CI95Valid {
+		t.Fatal("one observation cannot have a confidence interval")
+	}
+}
+
 func assertClose(t *testing.T, got, want float64) {
 	t.Helper()
 	if math.Abs(got-want) > 1e-9 {

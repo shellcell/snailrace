@@ -42,6 +42,17 @@ func TestRejectsLabelCountMismatch(t *testing.T) {
 	}
 }
 
+func TestRejectsEmptyAndDuplicateLabels(t *testing.T) {
+	for _, arguments := range [][]string{
+		{"-label", " ", "--", "true"},
+		{"-label", "same", "-label", "same", "-c", "true", "-c", "false"},
+	} {
+		if _, err := parseOptions(arguments, io.Discard); err == nil {
+			t.Fatalf("arguments %q should reject ambiguous labels", arguments)
+		}
+	}
+}
+
 func TestRejectsEmptyShellCommand(t *testing.T) {
 	for _, command := range []string{"", " \t\n"} {
 		if _, err := parseOptions([]string{"-c", command}, io.Discard); err == nil {

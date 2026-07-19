@@ -12,13 +12,18 @@ import (
 )
 
 func writeText(writer io.Writer, report model.Report) error {
-	if !report.Verbose {
-		return writeCompactText(writer, report)
-	}
-	return writeVerboseText(writer, report)
+	return writeTextRenderer(writer, NewRenderer(report))
 }
 
-func writeVerboseText(writer io.Writer, report model.Report) error {
+func writeTextRenderer(writer io.Writer, renderer *Renderer) error {
+	if !renderer.report.Verbose {
+		return writeCompactText(writer, renderer)
+	}
+	return writeVerboseText(writer, renderer)
+}
+
+func writeVerboseText(writer io.Writer, renderer *Renderer) error {
+	report := renderer.report
 	var output bytes.Buffer
 	w := tabwriter.NewWriter(&output, 0, 4, 2, ' ', 0)
 	fmt.Fprintf(w, "Snailrace report\t%s\n", report.MeasuredAt.Format(
@@ -38,8 +43,8 @@ func writeVerboseText(writer io.Writer, report model.Report) error {
 		report.Config.Mode, report.Config.Runs, report.Config.Warmups,
 		formatNumber(report.Config.IntervalMS),
 	)
-	fmt.Fprintf(w, "Included dimensions\t%s\n", includedDimensionsText(report))
-	for _, caveat := range reliabilityCaveats(report) {
+	fmt.Fprintf(w, "Included dimensions\t%s\n", renderer.dimensionText)
+	for _, caveat := range renderer.caveats {
 		fmt.Fprintf(w, "Reliability\t%s\n", caveat)
 	}
 	if report.Config.Mode == "tui" {
@@ -63,11 +68,11 @@ func writeVerboseText(writer io.Writer, report model.Report) error {
 	writeTextCommandLegend(w, report)
 	writeTextFailures(w, report)
 	if len(report.Benchmarks) > 1 {
-		writeTextRanking(w, report)
+		writeTextRankingWith(w, report, renderer.ranking)
 	}
 	if len(report.Benchmarks) > 1 {
 		fmt.Fprintln(w, "Detailed baseline deltas\t")
-		writeTextComparison(w, report)
+		writeTextComparison(w, renderer)
 	}
 	fmt.Fprintln(w, "Statistical detail\t")
 	for index, benchmark := range report.Benchmarks {

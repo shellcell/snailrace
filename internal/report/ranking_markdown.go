@@ -7,8 +7,7 @@ import (
 	"github.com/shellcell/snailrace/internal/model"
 )
 
-func writeMarkdownRanking(writer io.Writer, report model.Report) {
-	ranking := calculateRanking(report)
+func writeMarkdownRankingWith(writer io.Writer, report model.Report, ranking rankingData) {
 	if len(ranking.rows) == 0 {
 		fmt.Fprintf(
 			writer, "## Ranking Unavailable\n\n%s.\n\n",

@@ -1,11 +1,40 @@
 package report
 
 import (
+	"math"
 	"strings"
 	"testing"
 
 	"github.com/shellcell/snailrace/internal/model"
 )
+
+func TestEmptyReportBuildsNoCharts(t *testing.T) {
+	if charts := reportCharts(model.Report{}); len(charts) != 0 {
+		t.Fatalf("empty report charts = %d, want 0", len(charts))
+	}
+}
+
+func TestChartsOmitNonFiniteCoordinates(t *testing.T) {
+	runs := []model.Run{
+		{Index: 1, WallSeconds: math.Inf(1)},
+		{Index: 2, WallSeconds: math.NaN()},
+	}
+	report := model.Report{
+		Config: model.Config{Baseline: 1, Mode: "command"},
+		Host:   model.HostInfo{OS: "linux"},
+		Benchmarks: []model.Benchmark{{
+			Tool: model.ToolInfo{Name: "invalid", DiskFootprintBytes: 1},
+			Runs: runs, Summary: model.Summarize(runs),
+		}},
+	}
+	for _, chart := range reportCharts(report) {
+		output := chart.html()
+		if strings.Contains(output, "NaN") || strings.Contains(output, "+Inf") ||
+			strings.Contains(output, "-Inf") {
+			t.Fatalf("chart %q contains non-finite coordinates", chart.title)
+		}
+	}
+}
 
 func TestComparisonChartsContainDeltaAndRunViews(t *testing.T) {
 	report := model.Report{

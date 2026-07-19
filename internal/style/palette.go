@@ -15,5 +15,9 @@ var toolPalette = [...]Color{
 }
 
 func Tool(index int) Color {
-	return toolPalette[index%len(toolPalette)]
+	index %= len(toolPalette)
+	if index < 0 {
+		index += len(toolPalette)
+	}
+	return toolPalette[index]
 }

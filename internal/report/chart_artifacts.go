@@ -20,11 +20,17 @@ func WriteChartFiles(
 	report model.Report,
 	includeCommands bool,
 ) ([]ChartArtifact, error) {
-	report = safeDisplayReport(report)
+	return NewRenderer(report).WriteChartFiles(directory, includeCommands)
+}
+
+func (renderer *Renderer) WriteChartFiles(
+	directory string, includeCommands bool,
+) ([]ChartArtifact, error) {
+	report := renderer.report
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return nil, err
 	}
-	charts := reportCharts(report)
+	charts := renderer.reportCharts()
 	if includeCommands {
 		prefix := []svgChart{commandLegendChart(report)}
 		if failures := failureChart(report); failures.height > 0 {

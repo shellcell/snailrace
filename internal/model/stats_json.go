@@ -29,14 +29,14 @@ func (stats *Stats) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*stats = Stats(decoded.plain)
+	if stats.N < 2 {
+		stats.CI95Valid = false
+		return nil
+	}
 	if !stats.CI95Valid {
 		return nil
 	}
 	if decoded.CI95Low == nil || decoded.CI95High == nil {
-		if stats.N < 2 {
-			stats.CI95Valid = false
-			return nil
-		}
 		margin := stats.StdDev / math.Sqrt(float64(stats.N)) * tCritical95(stats.N-1)
 		stats.CI95Low = finiteDifference(stats.Mean, margin)
 		stats.CI95High = finiteSum(stats.Mean, margin)

@@ -24,6 +24,9 @@ func validateBenchmarkInputs(ctx context.Context, specs []Spec, config Config) e
 		return errors.New("sampling interval must be positive")
 	}
 	for index, spec := range specs {
+		if strings.TrimSpace(spec.Name) == "" {
+			return fmt.Errorf("command %d name cannot be blank", index+1)
+		}
 		if spec.Shell != "" && strings.TrimSpace(spec.Shell) == "" {
 			return fmt.Errorf("command %d shell source cannot be blank", index+1)
 		}

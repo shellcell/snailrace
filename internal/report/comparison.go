@@ -49,8 +49,11 @@ func compareMetric(
 	candidateMean := model.CalculateStats(candidateValues).Mean
 	result := deltaResult{baselineMean: baseMean, candidateMean: candidateMean}
 	if baseMean != 0 {
-		result.percent = (candidateMean/baseMean - 1) * 100
-		result.percentAvailable = true
+		percent := (candidateMean/baseMean - 1) * 100
+		if finiteChartValue(percent) {
+			result.percent = percent
+			result.percentAvailable = true
+		}
 	}
 	result.difference = model.CalculateStats(differences)
 	result.status, result.class = comparisonStatus(result.difference, row.direction)
@@ -76,6 +79,9 @@ func samplingReliable(
 }
 
 func benchmarkSamplesReliable(benchmark model.Benchmark, intervalSeconds float64) bool {
+	if len(benchmark.Runs) == 0 {
+		return false
+	}
 	if intervalSeconds <= 0 {
 		return true
 	}
@@ -97,7 +103,10 @@ func pairedValues(
 	baselineByIndex := make(map[int]float64, len(baseline))
 	for _, run := range baseline {
 		if valid(run) {
-			baselineByIndex[run.Index] = pick(run)
+			value := pick(run)
+			if finiteChartValue(value) {
+				baselineByIndex[run.Index] = value
+			}
 		}
 	}
 	baseValues := make([]float64, 0, len(candidate))
@@ -110,6 +119,9 @@ func pairedValues(
 		value, ok := baselineByIndex[run.Index]
 		if ok {
 			candidateValue := pick(run)
+			if !finiteChartValue(candidateValue) {
+				continue
+			}
 			baseValues = append(baseValues, value)
 			candidateValues = append(candidateValues, candidateValue)
 			differences = append(differences, candidateValue-value)

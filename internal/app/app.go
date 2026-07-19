@@ -214,11 +214,14 @@ func writeResult(
 	formats []string,
 	result model.Report,
 ) error {
+	renderer := report.NewRenderer(result)
 	var saveErr error
 	if directory != "" {
-		saveErr = saveReportFormats(stderr, directory, formats, result)
+		saveErr = saveReportFormatsRenderer(
+			stderr, directory, formats, result, renderer,
+		)
 	}
-	textErr := report.Write(stdout, "text", result)
+	textErr := renderer.Write(stdout, "text")
 	return errors.Join(saveErr, textErr)
 }
 
