@@ -6,8 +6,8 @@ import (
 	"math"
 	"strings"
 
-	"perftool/internal/analysis"
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/analysis"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 type tradeoffMetric struct {

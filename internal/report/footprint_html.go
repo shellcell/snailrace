@@ -5,7 +5,7 @@ import (
 	"html"
 	"io"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func writeHTMLLinkedFiles(writer io.Writer, tool model.ToolInfo) {

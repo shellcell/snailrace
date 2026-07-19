@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/term"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func writeText(writer io.Writer, report model.Report) error {

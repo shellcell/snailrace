@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func TestReportPathContainsToolAndMeasurementTime(t *testing.T) {

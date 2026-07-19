@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 const compactBarWidth = 20

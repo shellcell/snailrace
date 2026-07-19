@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"perftool/internal/model"
-	"perftool/internal/platform"
+	"github.com/shellcell/snailrace/internal/model"
+	"github.com/shellcell/snailrace/internal/platform"
 )
 
 type toolInspector struct {

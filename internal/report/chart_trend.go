@@ -6,8 +6,8 @@ import (
 	"math"
 	"strings"
 
-	"perftool/internal/model"
-	"perftool/internal/style"
+	"github.com/shellcell/snailrace/internal/model"
+	"github.com/shellcell/snailrace/internal/style"
 )
 
 type trendLane struct {

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"io"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 type jsonWinner struct {

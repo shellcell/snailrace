@@ -4,7 +4,7 @@ import (
 	"io"
 	"time"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 type Config struct {

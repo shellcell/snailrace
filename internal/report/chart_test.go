@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func TestComparisonChartsContainDeltaAndRunViews(t *testing.T) {

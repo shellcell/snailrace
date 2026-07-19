@@ -5,7 +5,7 @@ import (
 	"html"
 	"strings"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func commandLegendChart(report model.Report) svgChart {

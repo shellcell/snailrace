@@ -7,8 +7,8 @@ import (
 	"strings"
 	"unicode"
 
-	"perftool/internal/model"
-	"perftool/internal/style"
+	"github.com/shellcell/snailrace/internal/model"
+	"github.com/shellcell/snailrace/internal/style"
 )
 
 const chartWidth = 720

@@ -1,8 +1,8 @@
 package report
 
 import (
-	"perftool/internal/analysis"
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/analysis"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func calculateRanking(report model.Report) rankingData {

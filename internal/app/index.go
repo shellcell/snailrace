@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"perftool/internal/analysis"
+	"github.com/shellcell/snailrace/internal/analysis"
 )
 
 type indexValues struct {

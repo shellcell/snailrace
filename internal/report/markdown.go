@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func writeMarkdown(writer io.Writer, report model.Report) error {

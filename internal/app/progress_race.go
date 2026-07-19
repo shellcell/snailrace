@@ -6,9 +6,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"perftool/internal/analysis"
-	"perftool/internal/model"
-	"perftool/internal/runner"
+	"github.com/shellcell/snailrace/internal/analysis"
+	"github.com/shellcell/snailrace/internal/model"
+	"github.com/shellcell/snailrace/internal/runner"
 )
 
 var progressTrailGlyphs = [...]string{"▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"}

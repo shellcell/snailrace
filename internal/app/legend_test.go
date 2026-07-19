@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"perftool/internal/runner"
+	"github.com/shellcell/snailrace/internal/runner"
 )
 
 func TestPrintCommandLegendPlainForNonTerminal(t *testing.T) {

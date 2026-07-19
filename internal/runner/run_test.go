@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"perftool/internal/platform"
+	"github.com/shellcell/snailrace/internal/platform"
 )
 
 func TestRunOnceUsesInjectedOutputWriter(t *testing.T) {

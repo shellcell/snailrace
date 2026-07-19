@@ -3,8 +3,8 @@ package report
 import (
 	"fmt"
 
-	"perftool/internal/analysis"
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/analysis"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 // SamplingLimitNote returns guidance when RAM is present but sampling-limited,

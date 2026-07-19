@@ -3,8 +3,8 @@ package report
 import (
 	"testing"
 
-	"perftool/internal/analysis"
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/analysis"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func TestAutomaticBaselineUsesBalancedWinner(t *testing.T) {

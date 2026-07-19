@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func TestPairedComparisonRequiresConfidence(t *testing.T) {

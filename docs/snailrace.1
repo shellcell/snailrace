@@ -1,0 +1,114 @@
+.Dd July 19, 2026
+.Dt SNAILRACE 1
+.Os
+.Sh NAME
+.Nm snailrace
+.Nd benchmark commands: time, CPU, memory and disk footprint
+.Sh SYNOPSIS
+.Nm
+.Op options
+.Fl -\ command
+.Op Ar args ...
+.Nm
+.Op options
+.Fl c Ar command
+.Op Fl c Ar command
+.Nm Cm tui
+.Op options
+.Fl -\ command
+.Op Ar args ...
+.Sh DESCRIPTION
+.Nm
+benchmarks commands on Linux and macOS.
+It measures wall-clock time, CPU usage, memory, process structure, and
+static disk footprint, ranks the compared commands, and can save the
+results as a report.
+.Pp
+Commands are given either after a
+.Ql --
+separator or with repeated
+.Fl c
+flags.
+The
+.Cm tui
+subcommand renders a live terminal view while measuring.
+.Sh OPTIONS
+.Ss Input
+.Bl -tag -width Ds
+.It Fl c , Fl command Ar string
+Shell command to benchmark; repeat to compare several.
+.It Fl label Ar string
+Display label; repeat once per command, in order.
+.It Fl prepare Ar string
+One-time setup command run before measuring.
+.El
+.Ss Measurement
+.Bl -tag -width Ds
+.It Fl n , Fl runs Ar int
+Number of measured runs.
+.It Fl warmups Ar int
+Warmup runs per command.
+.It Fl interval Ar duration
+Process sampling interval.
+.El
+.Ss Ranking
+.Bl -tag -width Ds
+.It Fl index Ar list
+Balanced index dimensions:
+.Ql time ,
+.Ql cpu ,
+.Ql ram ,
+.Ql disk .
+.It Fl baseline Ar int
+Baseline index; 0 selects the balanced winner.
+.El
+.Ss Output
+.Bl -tag -width Ds
+.It Fl f , Fl format Ar list
+Saved report format:
+.Ql html ,
+.Ql svg ,
+.Ql markdown ,
+.Ql json ,
+.Ql text .
+.It Fl o , Fl output Ar string
+Directory for a saved report.
+.It Fl verbose
+Print full statistical tables to stdout.
+.It Fl show-output
+Forward command output to stderr.
+.El
+.Ss TUI ( Nm Cm tui No ... )
+.Bl -tag -width Ds
+.It Fl d , Fl duration Ar duration
+Fixed TUI measurement duration.
+.It Fl width Ar uint
+TUI columns; default inherits the terminal.
+.It Fl height Ar uint
+TUI rows; default inherits the terminal.
+.El
+.Ss Miscellaneous
+.Bl -tag -width Ds
+.It Fl v , Fl version
+Print version and exit.
+.It Fl h , Fl help
+Show help.
+.El
+.Sh EXAMPLES
+Benchmark one command with warmups:
+.Bd -literal -offset indent
+snailrace -n 20 -warmups 3 -- gzip -k sample.txt
+.Ed
+.Pp
+Compare two commands and save an HTML report:
+.Bd -literal -offset indent
+snailrace -n 10 -f html -o report -c 'gzip -k sample.txt' -c 'zstd -k sample.txt'
+.Ed
+.Pp
+Watch a command live in the TUI:
+.Bd -literal -offset indent
+snailrace tui -- make build
+.Ed
+.Sh SEE ALSO
+Project page:
+.Lk https://github.com/shellcell/snailrace

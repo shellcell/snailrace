@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/term"
 
-	"perftool/internal/runner"
+	"github.com/shellcell/snailrace/internal/runner"
 )
 
 // printCommandLegend lists each tool's label and full command before measurement

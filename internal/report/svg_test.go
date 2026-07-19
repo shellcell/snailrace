@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func TestSVGIsStandaloneCompleteReport(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 const htmlStart = `<!doctype html><html lang="en"><head><meta charset="utf-8">

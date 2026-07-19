@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"perftool/internal/platform"
-	"perftool/internal/runner"
+	"github.com/shellcell/snailrace/internal/platform"
+	"github.com/shellcell/snailrace/internal/runner"
 )
 
 type stringList []string

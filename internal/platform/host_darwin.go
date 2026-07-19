@@ -9,7 +9,7 @@ import (
 	"strings"
 	"syscall"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func Host() model.HostInfo {

@@ -3,7 +3,7 @@ package runner
 import (
 	"time"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 type progressTracker struct {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func writeTextComparison(writer io.Writer, report model.Report) {

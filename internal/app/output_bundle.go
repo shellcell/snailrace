@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"perftool/internal/model"
-	"perftool/internal/report"
+	"github.com/shellcell/snailrace/internal/model"
+	"github.com/shellcell/snailrace/internal/report"
 )
 
 func saveReportFormats(

@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"perftool/internal/model"
-	"perftool/internal/style"
+	"github.com/shellcell/snailrace/internal/model"
+	"github.com/shellcell/snailrace/internal/style"
 )
 
 func colorizeText(value string, report model.Report) string {

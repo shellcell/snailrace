@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 type ChartArtifact struct {

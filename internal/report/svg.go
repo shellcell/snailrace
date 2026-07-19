@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 const svgReportWidth = 1500

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func reportPath(directory, format string, report model.Report) string {

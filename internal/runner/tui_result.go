@@ -4,8 +4,8 @@ import (
 	"os/exec"
 	"time"
 
-	"perftool/internal/model"
-	"perftool/internal/platform"
+	"github.com/shellcell/snailrace/internal/model"
+	"github.com/shellcell/snailrace/internal/platform"
 )
 
 func makeTUIRun(

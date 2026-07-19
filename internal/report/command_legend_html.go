@@ -5,7 +5,7 @@ import (
 	"html"
 	"io"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func writeHTMLCommandLegend(writer io.Writer, report model.Report) {

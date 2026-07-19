@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"perftool/internal/report"
+	"github.com/shellcell/snailrace/internal/report"
 )
 
 func validateOptions(result options, commands []string, positional int) error {

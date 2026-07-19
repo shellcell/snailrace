@@ -3,7 +3,7 @@ package analysis
 import (
 	"testing"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func TestDefaultIndexExcludesDiskFootprint(t *testing.T) {

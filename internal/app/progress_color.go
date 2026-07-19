@@ -3,7 +3,7 @@ package app
 import (
 	"fmt"
 
-	"perftool/internal/style"
+	"github.com/shellcell/snailrace/internal/style"
 )
 
 func progressToolColor(index int, value string) string {

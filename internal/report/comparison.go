@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 type metricDirection int

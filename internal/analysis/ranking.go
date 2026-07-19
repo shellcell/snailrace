@@ -4,7 +4,7 @@ import (
 	"math"
 	"sort"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 type Ranking struct {

@@ -3,7 +3,7 @@ package report
 import (
 	"strings"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func fullCommand(benchmark model.Benchmark) string {

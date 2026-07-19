@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/term"
 
-	"perftool/internal/runner"
+	"github.com/shellcell/snailrace/internal/runner"
 )
 
 func progressRenderer(

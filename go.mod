@@ -1,4 +1,4 @@
-module perftool
+module github.com/shellcell/snailrace
 
 go 1.22
 

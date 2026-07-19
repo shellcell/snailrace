@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"perftool/internal/app"
+	"github.com/shellcell/snailrace/internal/app"
 )
 
 func main() {

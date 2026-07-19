@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"html"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func htmlToolLabel(report model.Report, index int, badge bool) string {

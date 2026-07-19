@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func rankingWinners(report model.Report, ranking rankingData) []categoryWinner {

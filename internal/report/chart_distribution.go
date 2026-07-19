@@ -6,7 +6,7 @@ import (
 	"math"
 	"strings"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func absoluteDistributionChart(report model.Report, metric chartMetric) svgChart {

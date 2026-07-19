@@ -6,7 +6,7 @@ import (
 	"io"
 	"math"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func writeHTMLRanking(writer io.Writer, report model.Report) {

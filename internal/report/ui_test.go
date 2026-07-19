@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func TestHumanFormatsAvoidScientificNotationForLargeUnits(t *testing.T) {

@@ -1,6 +1,6 @@
 package report
 
-import "perftool/internal/model"
+import "github.com/shellcell/snailrace/internal/model"
 
 func reportCharts(report model.Report) []svgChart {
 	groups := chartGroups(report)

@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func Write(writer io.Writer, format string, report model.Report) error {

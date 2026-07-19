@@ -5,7 +5,7 @@ import (
 	"math"
 	"strings"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 type metricRow struct {

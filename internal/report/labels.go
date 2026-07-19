@@ -1,6 +1,6 @@
 package report
 
-import "perftool/internal/model"
+import "github.com/shellcell/snailrace/internal/model"
 
 func reportToolLabel(report model.Report, index int) string {
 	label := report.Benchmarks[index].Tool.Name

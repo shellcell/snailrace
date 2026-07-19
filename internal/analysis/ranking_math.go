@@ -3,7 +3,7 @@ package analysis
 import (
 	"math"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func normalized(values []float64) []float64 {

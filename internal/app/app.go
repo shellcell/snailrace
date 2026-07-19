@@ -12,14 +12,16 @@ import (
 	"syscall"
 	"time"
 
-	"perftool/internal/analysis"
-	"perftool/internal/model"
-	"perftool/internal/platform"
-	"perftool/internal/report"
-	"perftool/internal/runner"
+	"github.com/shellcell/snailrace/internal/analysis"
+	"github.com/shellcell/snailrace/internal/model"
+	"github.com/shellcell/snailrace/internal/platform"
+	"github.com/shellcell/snailrace/internal/report"
+	"github.com/shellcell/snailrace/internal/runner"
 )
 
-const Version = "0.0.2"
+// Version is the release tag (vX.Y.Z), injected at build time via
+// -ldflags "-X github.com/shellcell/snailrace/internal/app.Version=...".
+var Version = "dev"
 
 func Run(arguments []string, stdout, stderr io.Writer) error {
 	options, err := parseOptions(arguments, stderr)

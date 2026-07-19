@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"perftool/internal/runner"
+	"github.com/shellcell/snailrace/internal/runner"
 )
 
 func makeSpecs(commands, arguments []string, labels []string) []runner.Spec {

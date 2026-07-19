@@ -5,7 +5,7 @@ import (
 	"io"
 	"math"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 func writeTextRanking(writer io.Writer, report model.Report) {

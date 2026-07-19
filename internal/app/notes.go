@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"time"
 
-	"perftool/internal/platform"
+	"github.com/shellcell/snailrace/internal/platform"
 )
 
 func platformNotes(

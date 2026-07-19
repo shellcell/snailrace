@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"perftool/internal/model"
+	"github.com/shellcell/snailrace/internal/model"
 )
 
 // ErrInterrupted reports that measurement was cancelled (for example by Ctrl+C)

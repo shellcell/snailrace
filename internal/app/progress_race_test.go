@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"perftool/internal/model"
-	"perftool/internal/runner"
+	"github.com/shellcell/snailrace/internal/model"
+	"github.com/shellcell/snailrace/internal/runner"
 )
 
 var progressColorSequence = regexp.MustCompile(`\x1b\[[0-9;]*m`)
