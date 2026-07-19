@@ -7,9 +7,35 @@ memory, process structure, and static disk footprint.
 
 ## Install
 
+### Homebrew (macOS / Linux)
+
 ```sh
 brew install shellcell/tap/snailrace
 ```
+
+### Linux packages (apt / dnf / apk)
+
+Enable the shellcell repository once — setup instructions at
+<https://packages.shellcell.dev> — then:
+
+```sh
+sudo apt install snailrace   # Debian / Ubuntu
+sudo dnf install snailrace   # Fedora / RHEL
+sudo apk add snailrace       # Alpine
+```
+
+### Go
+
+```sh
+go install github.com/shellcell/snailrace/cmd/snailrace@latest   # Go 1.22+
+```
+
+### Prebuilt binaries
+
+Download the archive for your OS/arch from
+[Releases](https://github.com/shellcell/snailrace/releases); each contains the
+binary, man page, and shell completions. To build from source, see
+[Build](#build) below.
 
 ## Build
 

@@ -1,0 +1,35 @@
+# nfpm configuration for building .deb, .rpm and .apk packages.
+#
+# Driven by environment variables so one config covers every arch:
+#   PKG_VERSION  package version (without a leading "v")
+#   PKG_ARCH     nfpm arch, e.g. amd64, arm64
+#   PKG_BIN      path to the prebuilt snailrace binary for that arch
+#
+# See the "Build distro packages" step in .github/workflows/release.yml,
+# which sets these per matrix leg.
+name: snailrace
+arch: ${PKG_ARCH}
+platform: linux
+version: ${PKG_VERSION}
+section: utils
+priority: optional
+maintainer: Polina Simonenko <rabarbrablad@gmail.com>
+description: |
+  Benchmark commands: time, CPU, memory and disk footprint.
+  snailrace benchmarks commands, measures wall-clock time, CPU usage, memory,
+  process structure and static disk footprint, ranks the compared commands,
+  and can save the results as a report.
+vendor: shellcell
+homepage: https://github.com/shellcell/snailrace
+license: MIT
+contents:
+  - src: ${PKG_BIN}
+    dst: /usr/bin/snailrace
+  - src: ./docs/snailrace.1
+    dst: /usr/share/man/man1/snailrace.1
+  - src: ./completions/snailrace.bash
+    dst: /usr/share/bash-completion/completions/snailrace
+  - src: ./completions/snailrace.fish
+    dst: /usr/share/fish/vendor_completions.d/snailrace.fish
+  - src: ./completions/_snailrace
+    dst: /usr/share/zsh/site-functions/_snailrace
