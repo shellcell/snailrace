@@ -60,12 +60,24 @@ jobs:
           tar -czf "$name.tar.gz" "$name"
           shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"
           echo "ARCHIVE=$name.tar.gz" >> "$GITHUB_ENV"
+      - name: Build distro packages (.deb/.rpm/.apk)
+        if: matrix.goos == 'linux' && (matrix.goarch == 'amd64' || matrix.goarch == 'arm64')
+        run: |
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+          sudo apt-get update && sudo apt-get install -y gettext-base
+          export PKG_VERSION="${GITHUB_REF_NAME#v}" PKG_ARCH="${{ matrix.goarch }}" PKG_BIN=./snailrace
+          envsubst < nfpm.yaml > /tmp/nfpm.yaml
+          mkdir -p pkgs
+          for fmt in deb rpm apk; do
+            nfpm package -f /tmp/nfpm.yaml -p "$fmt" -t pkgs
+          done
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             ${{ env.ARCHIVE }}
             ${{ env.ARCHIVE }}.sha256
+            pkgs/*
 
   bump-tap:
     needs: release
@@ -78,4 +90,17 @@ jobs:
           gh api repos/shellcell/homebrew-tap/dispatches \
             -f event_type=bump-formula \
             -f 'client_payload[formula]=snailrace' \
+            -f "client_payload[version]=${GITHUB_REF_NAME#v}"
+
+  publish-packages:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger package repo publish
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          gh api repos/shellcell/packages/dispatches \
+            -f event_type=publish-packages \
+            -f "client_payload[project]=${GITHUB_REPOSITORY#*/}" \
             -f "client_payload[version]=${GITHUB_REF_NAME#v}"
