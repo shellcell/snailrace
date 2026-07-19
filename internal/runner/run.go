@@ -2,7 +2,9 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"os"
+	"os/exec"
 	"syscall"
 	"time"
 
@@ -48,7 +50,7 @@ func runOnce(
 	if ctx.Err() != nil {
 		return model.Run{}, ctx.Err()
 	}
-	if waitErr != nil {
+	if waitErr != nil && !isNonZeroExit(cmd, waitErr) {
 		return model.Run{}, waitErr
 	}
 	meanResident := sampledMeanResident(peak)
@@ -68,6 +70,12 @@ func runOnce(
 		SampleCount:                int(peak.SampleCount),
 		SampleCoverageSeconds:      peak.SampleCoverageSeconds,
 	}, nil
+}
+
+func isNonZeroExit(cmd *exec.Cmd, err error) bool {
+	var exitError *exec.ExitError
+	return errors.As(err, &exitError) && cmd.ProcessState != nil &&
+		cmd.ProcessState.ExitCode() > 0
 }
 
 func monitor(

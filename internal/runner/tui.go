@@ -80,7 +80,7 @@ func runTUIOnce(
 	if options.Duration > 0 && reason == "exited" {
 		return model.Run{}, errors.New("TUI exited before the fixed duration")
 	}
-	if waitErr != nil && reason == "exited" {
+	if waitErr != nil && reason == "exited" && !isNonZeroExit(cmd, waitErr) {
 		return model.Run{}, waitErr
 	}
 	select {

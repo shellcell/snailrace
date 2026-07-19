@@ -35,6 +35,19 @@ func TestFixedDurationTUIRejectsEarlyExit(t *testing.T) {
 	}
 }
 
+func TestTUIRecordsNonZeroExit(t *testing.T) {
+	run, err := runTUIOnce(
+		context.Background(), Spec{Name: "exit", Shell: "exit 7"},
+		time.Millisecond, Options{TUI: true},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.ExitCode != 7 {
+		t.Fatalf("exit code = %d, want 7", run.ExitCode)
+	}
+}
+
 func TestTerminalSizeOverridesDimensions(t *testing.T) {
 	width, height := ResolveTerminalSize(132, 43)
 	if width != 132 || height != 43 {

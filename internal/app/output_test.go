@@ -103,3 +103,16 @@ func TestMarkdownAndSVGSavedAsChartBundle(t *testing.T) {
 		t.Fatalf("chart files = %v, error = %v", charts, err)
 	}
 }
+
+func TestRunIgnoresNonZeroCommandExit(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := Run(
+		[]string{"-n", "2", "-warmups", "0", "-c", "exit 7"},
+		&stdout, &stderr,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout.String(), "TIME") {
+		t.Fatal("stdout does not contain the completed report")
+	}
+}

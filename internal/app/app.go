@@ -139,7 +139,7 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 	); err != nil {
 		return err
 	}
-	return checkExitCodes(benchmarks)
+	return nil
 }
 
 func oneBasedOrder(order [][]int) [][]int {
@@ -191,20 +191,6 @@ func writeResult(
 		return nil
 	}
 	return saveReportFormats(stderr, directory, formats, result)
-}
-
-func checkExitCodes(benchmarks []model.Benchmark) error {
-	for _, benchmark := range benchmarks {
-		for _, run := range benchmark.Runs {
-			if run.ExitCode != 0 && run.StopReason != "duration" {
-				return fmt.Errorf(
-					"%q exited unsuccessfully in one or more runs",
-					benchmark.Tool.Name,
-				)
-			}
-		}
-	}
-	return nil
 }
 
 func modeName(tui bool) string {

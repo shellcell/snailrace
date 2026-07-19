@@ -50,6 +50,31 @@ func TestBenchmarkInterruptionBeforeAnyRoundFails(t *testing.T) {
 	}
 }
 
+func TestBenchmarkContinuesAfterNonZeroExit(t *testing.T) {
+	benchmarks, err := Benchmark(
+		context.Background(),
+		[]Spec{
+			{Name: "exit", Shell: "exit 7"},
+			{Name: "true", Args: []string{"/bin/true"}},
+		},
+		Config{Runs: 3, Warmups: 1, Interval: time.Millisecond},
+		Options{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index, benchmark := range benchmarks {
+		if len(benchmark.Runs) != 3 {
+			t.Fatalf("tool %d recorded %d runs, want 3", index, len(benchmark.Runs))
+		}
+	}
+	for _, run := range benchmarks[0].Runs {
+		if run.ExitCode != 7 {
+			t.Fatalf("exit code = %d, want 7", run.ExitCode)
+		}
+	}
+}
+
 func completedRoundCount(estimates []ProgressEstimate) int {
 	if len(estimates) == 0 {
 		return 0

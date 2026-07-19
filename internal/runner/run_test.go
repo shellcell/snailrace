@@ -28,13 +28,16 @@ func TestRunOnceUsesInjectedOutputWriter(t *testing.T) {
 	}
 }
 
-func TestRunOnceRejectsFailedCommand(t *testing.T) {
-	_, err := runOnce(
-		context.Background(), Spec{Name: "false", Args: []string{"/bin/false"}},
+func TestRunOnceRecordsNonZeroExit(t *testing.T) {
+	run, err := runOnce(
+		context.Background(), Spec{Name: "exit", Shell: "exit 7"},
 		time.Millisecond, Options{},
 	)
-	if err == nil {
-		t.Fatal("failed command should not become a benchmark observation")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.ExitCode != 7 {
+		t.Fatalf("exit code = %d, want 7", run.ExitCode)
 	}
 }
 
