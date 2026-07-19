@@ -16,7 +16,7 @@ func TestCachedRendererMatchesIndependentFormats(t *testing.T) {
 		if err := renderer.Write(&cached, format); err != nil {
 			t.Fatal(err)
 		}
-		if err := Write(&independent, format, report); err != nil {
+		if err := NewRenderer(report).Write(&independent, format); err != nil {
 			t.Fatal(err)
 		}
 		if cached.String() != independent.String() {
@@ -25,12 +25,55 @@ func TestCachedRendererMatchesIndependentFormats(t *testing.T) {
 	}
 }
 
+func TestRendererOutputIsOrderIndependentAndRepeatable(t *testing.T) {
+	report := benchmarkReport(3, 4)
+	formats := []string{"html", "svg", "markdown", "json", "text"}
+	want := make(map[string]string, len(formats))
+	for _, format := range formats {
+		var output bytes.Buffer
+		if err := NewRenderer(report).Write(&output, format); err != nil {
+			t.Fatal(err)
+		}
+		want[format] = output.String()
+	}
+	for _, order := range [][]string{
+		formats,
+		{"text", "json", "markdown", "svg", "html", "text"},
+	} {
+		renderer := NewRenderer(report)
+		for _, format := range order {
+			var output bytes.Buffer
+			if err := renderer.Write(&output, format); err != nil {
+				t.Fatal(err)
+			}
+			if output.String() != want[format] {
+				t.Fatalf("%s output depends on rendering order", format)
+			}
+		}
+	}
+}
+
+func TestRendererMetadataIsIndependent(t *testing.T) {
+	report := benchmarkReport(2, 2)
+	originalName := report.Benchmarks[0].Tool.Name
+	renderer := NewRenderer(report)
+	report.Benchmarks[0].Tool.Name = "changed"
+	metadata := renderer.Metadata()
+	if metadata.ToolNames[0] != originalName {
+		t.Fatalf("renderer metadata changed with source: %+v", metadata)
+	}
+	metadata.ToolNames[0] = "also changed"
+	if renderer.Metadata().ToolNames[0] != originalName {
+		t.Fatal("renderer returned mutable metadata")
+	}
+}
+
 func BenchmarkWriteHTML10Tools100Runs(b *testing.B) {
 	report := benchmarkReport(10, 100)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		if err := Write(io.Discard, "html", report); err != nil {
+		if err := NewRenderer(report).Write(io.Discard, "html"); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -41,7 +84,7 @@ func BenchmarkReportCharts10Tools100Runs(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		if charts := reportCharts(report); len(charts) == 0 {
+		if charts := NewRenderer(report).reportCharts(); len(charts) == 0 {
 			b.Fatal("no charts")
 		}
 	}
@@ -69,7 +112,7 @@ func BenchmarkWriteAllFormatsIndependent10Tools100Runs(b *testing.B) {
 	b.ResetTimer()
 	for range b.N {
 		for _, format := range formats {
-			if err := Write(io.Discard, format, report); err != nil {
+			if err := NewRenderer(report).Write(io.Discard, format); err != nil {
 				b.Fatal(err)
 			}
 		}

@@ -22,7 +22,7 @@ func tradeoffCharts(report model.Report, ranking rankingData) []svgChart {
 	primary := tradeoffMetric{"Time", formatDuration, func(b model.Benchmark) float64 {
 		return b.Summary.WallSeconds.Mean
 	}}
-	if report.Config.Mode == "tui" && report.Config.DurationSeconds > 0 {
+	if report.Config.FixedDurationTUI() {
 		primary = tradeoffMetric{"Average CPU", formatPercent, func(b model.Benchmark) float64 {
 			return b.Summary.AverageCPUPercent.Mean
 		}}
@@ -42,7 +42,7 @@ func tradeoffCharts(report model.Report, ranking rankingData) []svgChart {
 		return float64(b.Tool.DiskFootprintBytes)
 	}}
 	pairs := [][2]tradeoffMetric{{primary, cpu}, {primary, linked}}
-	if ranking.ramAvailable {
+	if ranking.RAMAvailable {
 		pairs = append(pairs, [2]tradeoffMetric{primary, ram}, [2]tradeoffMetric{cpu, ram})
 	}
 	charts := make([]svgChart, 0, len(pairs))
@@ -57,7 +57,7 @@ func tradeoffChart(report model.Report, xMetric, yMetric tradeoffMetric) svgChar
 	xMaximum, yMaximum := 0.0, 0.0
 	for _, benchmark := range report.Benchmarks {
 		xValue, yValue := xMetric.value(benchmark), yMetric.value(benchmark)
-		if !finiteChartValue(xValue) || !finiteChartValue(yValue) ||
+		if !finiteNumber(xValue) || !finiteNumber(yValue) ||
 			xValue < 0 || yValue < 0 {
 			return svgChart{}
 		}
@@ -91,7 +91,7 @@ func tradeoffChart(report model.Report, xMetric, yMetric tradeoffMetric) svgChar
 		xValue, yValue := xMetric.value(benchmark), yMetric.value(benchmark)
 		x := left + xValue/xMaximum*plotWidth
 		y := top + plotHeight - yValue/yMaximum*plotHeight
-		color := toolColor(report, index)
+		color := toolColor(index)
 		legendY := 67 + index*26
 		fmt.Fprintf(
 			&body,

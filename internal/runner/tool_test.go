@@ -2,9 +2,12 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/shellcell/snailrace/internal/platform"
 )
 
 func TestInspectionHonorsCancelledContext(t *testing.T) {
@@ -14,6 +17,37 @@ func TestInspectionHonorsCancelledContext(t *testing.T) {
 		ctx, Spec{Name: "true", Args: []string{"/bin/true"}},
 	); err == nil {
 		t.Fatal("cancelled inspection should fail")
+	}
+}
+
+func TestToolInspectorUsesInjectedDependencyDiscovery(t *testing.T) {
+	calls := 0
+	inspector := newToolInspectorWith(func(
+		context.Context, string,
+	) ([]platform.LinkedDependency, error) {
+		calls++
+		return nil, nil
+	})
+	for _, name := range []string{"first", "second"} {
+		if _, err := inspector.inspect(
+			context.Background(), Spec{Name: name, Args: []string{"/bin/true"}},
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("dependency discovery calls = %d, want 1 cached call", calls)
+	}
+	expected := errors.New("dependency failure")
+	inspector = newToolInspectorWith(func(
+		context.Context, string,
+	) ([]platform.LinkedDependency, error) {
+		return nil, expected
+	})
+	if _, err := inspector.inspect(
+		context.Background(), Spec{Name: "tool", Args: []string{"/bin/true"}},
+	); !errors.Is(err, expected) {
+		t.Fatalf("dependency error = %v, want %v", err, expected)
 	}
 }
 

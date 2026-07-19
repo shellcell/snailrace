@@ -15,7 +15,7 @@ const compactBarWidth = 20
 
 // writeCompactText renders the short, bar-chart stdout report used by default.
 func writeCompactText(writer io.Writer, renderer *Renderer) error {
-	report := renderer.report
+	report := renderer.displayReport
 	terminal := writerIsTerminal(writer)
 	var body strings.Builder
 	body.WriteString("\n")
@@ -45,7 +45,7 @@ type compactMetric struct {
 }
 
 func compactMetrics(report model.Report, ranking rankingData) []compactMetric {
-	fixedTUI := report.Config.Mode == "tui" && report.Config.DurationSeconds > 0
+	fixedTUI := report.Config.FixedDurationTUI()
 	primaryStdDev := func(s model.Summary) float64 { return s.WallSeconds.StdDev }
 	cpuStdDev := func(s model.Summary) float64 { return s.CPUTotalSeconds.StdDev }
 	if fixedTUI {
@@ -53,7 +53,7 @@ func compactMetrics(report model.Report, ranking rankingData) []compactMetric {
 		cpuStdDev = primaryStdDev
 	}
 	ramNote := ""
-	if ranking.ramPresent && !ranking.ramAvailable {
+	if ranking.RAMPresent && !ranking.RAMAvailable {
 		ramNote = "  (sampling-limited · excluded from balanced index"
 		if ranking.samplingInterval != "" {
 			ramNote += "; lower -interval, now " + ranking.samplingInterval
@@ -70,31 +70,31 @@ func compactMetrics(report model.Report, ranking rankingData) []compactMetric {
 	return []compactMetric{
 		{
 			name: ranking.primaryLabel, unit: ranking.primaryUnit,
-			available: ranking.primaryRatio,
-			value:     func(r rankingRow) float64 { return r.primaryValue },
+			available: ranking.PrimaryRatio,
+			value:     func(r rankingRow) float64 { return r.PrimaryValue },
 			stdDev:    primaryStdDev,
 		},
 		{
 			name: "CPU", unit: func(v float64) string { return cpuCompactUnit(fixedTUI, v) },
-			available: ranking.cpuRatio,
-			value:     func(r rankingRow) float64 { return r.cpuValue },
+			available: ranking.CPURatio,
+			value:     func(r rankingRow) float64 { return r.CPUValue },
 			stdDev:    cpuStdDev,
 		},
 		{
-			name: "RAM", note: ramNote, unit: formatBytes, available: ranking.ramPresent,
-			value:  func(r rankingRow) float64 { return r.ramValue },
+			name: "RAM", note: ramNote, unit: formatBytes, available: ranking.RAMPresent,
+			value:  func(r rankingRow) float64 { return r.RAMValue },
 			stdDev: func(s model.Summary) float64 { return s.MeanResidentBytes.StdDev },
 		},
 		{
 			name: "PHYS", unit: formatBytes, available: physicalFootprintAvailable(report),
 			value: func(r rankingRow) float64 {
-				return report.Benchmarks[r.benchmark].Summary.PhysicalFootprintStats().Mean
+				return report.Benchmarks[r.Benchmark].Summary.PhysicalFootprintStats().Mean
 			},
 			stdDev: func(s model.Summary) float64 { return s.PhysicalFootprintStats().StdDev },
 		},
 		{
-			name: "DISK", note: diskNote, unit: formatBytes, available: ranking.footprintRatio,
-			value: func(r rankingRow) float64 { return r.footprintValue },
+			name: "DISK", note: diskNote, unit: formatBytes, available: ranking.FootprintRatio,
+			value: func(r rankingRow) float64 { return r.FootprintValue },
 		},
 	}
 }
@@ -109,24 +109,24 @@ func cpuCompactUnit(fixedTUI bool, value float64) string {
 func writeCompactBars(
 	body *strings.Builder, report model.Report, ranking rankingData, terminal bool,
 ) {
-	if len(ranking.rows) == 0 {
-		fmt.Fprintf(body, "BALANCED  unavailable: %s\n\n", ranking.unavailableReason)
+	if len(ranking.Rows) == 0 {
+		fmt.Fprintf(body, "BALANCED  unavailable: %s\n\n", ranking.UnavailableReason)
 		return
 	}
-	rows := rowsByBenchmark(ranking.rows)
+	rows := rowsByBenchmark(ranking.Rows)
 	labelWidth := compactLabelWidth(report)
 
-	if ranking.available {
-		winner := report.Benchmarks[ranking.rows[0].benchmark].Tool.Name
+	if ranking.Available {
+		winner := report.Benchmarks[ranking.Rows[0].Benchmark].Tool.Name
 		fmt.Fprintf(
 			body, "BALANCED  %s        winner %s\n",
 			balancedIndexCategories(ranking), winner,
 		)
 		writeBarGroup(body, report, terminal, labelWidth, rows, func(r rankingRow) float64 {
-			return r.overallScore
-		}, func(r rankingRow) string { return formatScore(r.overallScore) })
+			return r.OverallScore
+		}, func(r rankingRow) string { return formatScore(r.OverallScore) })
 	} else {
-		fmt.Fprintf(body, "BALANCED  unavailable: %s\n\n", ranking.unavailableReason)
+		fmt.Fprintf(body, "BALANCED  unavailable: %s\n\n", ranking.UnavailableReason)
 	}
 
 	for _, metric := range compactMetrics(report, ranking) {
@@ -137,7 +137,7 @@ func writeCompactBars(
 		writeBarGroup(body, report, terminal, labelWidth, rows, metric.value, func(r rankingRow) string {
 			text := metric.unit(metric.value(r))
 			if metric.stdDev != nil {
-				sigma := metric.stdDev(report.Benchmarks[r.benchmark].Summary)
+				sigma := metric.stdDev(report.Benchmarks[r.Benchmark].Summary)
 				text += " ± " + metric.unit(sigma)
 			}
 			return text
@@ -187,17 +187,17 @@ func writeBarGroup(
 func writeCompactSingle(
 	body *strings.Builder, report model.Report, ranking rankingData, terminal bool,
 ) {
-	if len(ranking.rows) == 0 {
+	if len(ranking.Rows) == 0 {
 		return
 	}
-	row := ranking.rows[0]
+	row := ranking.Rows[0]
 	for _, metric := range compactMetrics(report, ranking) {
 		if !metric.available {
 			continue
 		}
 		text := metric.unit(metric.value(row))
 		if metric.stdDev != nil {
-			sigma := metric.stdDev(report.Benchmarks[row.benchmark].Summary)
+			sigma := metric.stdDev(report.Benchmarks[row.Benchmark].Summary)
 			text += " ± " + metric.unit(sigma)
 		}
 		fmt.Fprintf(body, "  %-5s %s%s\n", metric.name, text, redNote(metric.note, terminal))
@@ -227,7 +227,7 @@ func textBar(fraction float64, width int) string {
 func rowsByBenchmark(rows []rankingRow) map[int]rankingRow {
 	result := make(map[int]rankingRow, len(rows))
 	for _, row := range rows {
-		result[row.benchmark] = row
+		result[row.Benchmark] = row
 	}
 	return result
 }

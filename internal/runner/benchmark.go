@@ -27,6 +27,10 @@ func Benchmark(
 	for index := range specs {
 		specs[index].Args = append([]string(nil), specs[index].Args...)
 	}
+	prepared := make([]preparedSpec, len(specs))
+	for index, spec := range specs {
+		prepared[index] = preparedSpec{Spec: spec}
+	}
 	benchmarks := make([]model.Benchmark, len(specs))
 	progress := newProgressTracker(options, specs, config)
 	defer progress.finish()
@@ -52,14 +56,14 @@ func Benchmark(
 		pinned[index] = file
 		pinExecution := !executableIsScript(file)
 		if pinExecution {
-			specs[index].executable = file
+			prepared[index].executable = file
 		}
 		if tool.ShellTarget && pinExecution {
 			if command, ok := pinShellExecutable(
 				spec.Shell, pinnedExecutablePath(file),
 			); ok {
-				specs[index].Shell = command
-				specs[index].shellTarget = true
+				prepared[index].Shell = command
+				prepared[index].shellTarget = true
 			}
 		}
 		benchmarks[index].Tool = tool
@@ -74,7 +78,7 @@ func Benchmark(
 	interrupted := false
 	for warmup, order := range warmupOrder {
 		for _, index := range order {
-			spec := specs[index]
+			spec := prepared[index]
 			progress.update(
 				index, spec.Name, warmup+1, config.Warmups, true, false, nil,
 			)
@@ -110,7 +114,7 @@ func Benchmark(
 				index, specs[index].Name, runIndex+1, config.Runs,
 				false, false, benchmarks[index].Runs,
 			)
-			run, err := runOnce(ctx, specs[index], config.Interval, options)
+			run, err := runOnce(ctx, prepared[index], config.Interval, options)
 			if err != nil {
 				if ctx.Err() != nil {
 					interrupted = true

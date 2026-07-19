@@ -8,8 +8,8 @@ import (
 func Summarize(runs []Run) Summary {
 	values := func(pick func(Run) float64) []float64 {
 		result := make([]float64, len(runs))
-		for i, run := range runs {
-			result[i] = pick(run)
+		for index, run := range runs {
+			result[index] = pick(run)
 		}
 		return result
 	}
@@ -25,42 +25,28 @@ func Summarize(runs []Run) Summary {
 		physicalStats = &value
 	}
 	return Summary{
-		WallSeconds: stats(values(func(r Run) float64 { return r.WallSeconds })),
-		CPUTotalSeconds: stats(values(func(r Run) float64 {
-			return r.CPUUserSeconds + r.CPUSystemSeconds
+		WallSeconds: stats(values(func(run Run) float64 { return run.WallSeconds })),
+		CPUTotalSeconds: stats(values(func(run Run) float64 {
+			return run.CPUUserSeconds + run.CPUSystemSeconds
 		})),
-		CPUUserSeconds: stats(values(func(r Run) float64 {
-			return r.CPUUserSeconds
-		})),
-		CPUSystemSeconds: stats(values(func(r Run) float64 {
-			return r.CPUSystemSeconds
-		})),
-		AverageCPUPercent: stats(values(func(r Run) float64 {
-			return r.AverageCPUPercent
-		})),
-		PeakResidentBytes: stats(values(func(r Run) float64 {
-			return r.PeakResidentBytes
-		})),
+		CPUUserSeconds:             stats(values(func(run Run) float64 { return run.CPUUserSeconds })),
+		CPUSystemSeconds:           stats(values(func(run Run) float64 { return run.CPUSystemSeconds })),
+		AverageCPUPercent:          stats(values(func(run Run) float64 { return run.AverageCPUPercent })),
+		PeakResidentBytes:          stats(values(func(run Run) float64 { return run.PeakResidentBytes })),
 		PeakPhysicalFootprintBytes: physicalStats,
-		OSMaxRSSBytes: stats(values(func(r Run) float64 {
-			return r.OSMaxRSSBytes
+		OSMaxRSSBytes:              stats(values(func(run Run) float64 { return run.OSMaxRSSBytes })),
+		MeanResidentBytes:          stats(values(func(run Run) float64 { return run.MeanResidentBytes })),
+		PeakVirtualBytes:           stats(values(func(run Run) float64 { return run.PeakVirtualBytes })),
+		PeakProcesses:              stats(values(func(run Run) float64 { return run.PeakProcesses })),
+		PeakThreads:                stats(values(func(run Run) float64 { return run.PeakThreads })),
+		PeakFileDescriptors: stats(values(func(run Run) float64 {
+			return run.PeakFileDescriptors
 		})),
-		MeanResidentBytes: stats(values(func(r Run) float64 {
-			return r.MeanResidentBytes
+		ValidSampleCount: stats(values(func(run Run) float64 {
+			return float64(run.SampleCount)
 		})),
-		PeakVirtualBytes: stats(values(func(r Run) float64 {
-			return r.PeakVirtualBytes
-		})),
-		PeakProcesses: stats(values(func(r Run) float64 { return r.PeakProcesses })),
-		PeakThreads:   stats(values(func(r Run) float64 { return r.PeakThreads })),
-		PeakFileDescriptors: stats(values(func(r Run) float64 {
-			return r.PeakFileDescriptors
-		})),
-		ValidSampleCount: stats(values(func(r Run) float64 {
-			return float64(r.SampleCount)
-		})),
-		SampleCoverageSeconds: stats(values(func(r Run) float64 {
-			return r.SampleCoverageSeconds
+		SampleCoverageSeconds: stats(values(func(run Run) float64 {
+			return run.SampleCoverageSeconds
 		})),
 	}
 }

@@ -35,22 +35,28 @@ func baselineIndex(report model.Report) int {
 func compareMetric(
 	baseline model.Benchmark,
 	candidate model.Benchmark,
-	row metricRow,
+	row metricDefinition,
 	intervalSeconds float64,
 ) deltaResult {
-	valid := func(model.Run) bool { return true }
-	if row.darwinOnly {
-		valid = func(run model.Run) bool { return run.PhysicalFootprintValid }
-	}
-	baseValues, candidateValues, differences := pairedValues(
-		baseline.Runs, candidate.Runs, row.run, valid,
+	return compareMetricWithBaselineIndex(
+		baseline, indexMetricValues(baseline.Runs, row), candidate, row, intervalSeconds,
 	)
-	baseMean := model.CalculateStats(baseValues).Mean
-	candidateMean := model.CalculateStats(candidateValues).Mean
+}
+
+func compareMetricWithBaselineIndex(
+	baseline model.Benchmark,
+	baselineValues map[int]float64,
+	candidate model.Benchmark,
+	row metricDefinition,
+	intervalSeconds float64,
+) deltaResult {
+	baseMean, candidateMean, differences := pairedDifferences(
+		baselineValues, candidate.Runs, row,
+	)
 	result := deltaResult{baselineMean: baseMean, candidateMean: candidateMean}
 	if baseMean != 0 {
 		percent := (candidateMean/baseMean - 1) * 100
-		if finiteChartValue(percent) {
+		if finiteNumber(percent) {
 			result.percent = percent
 			result.percentAvailable = true
 		}
@@ -63,6 +69,20 @@ func compareMetric(
 	return result
 }
 
+func indexMetricValues(runs []model.Run, row metricDefinition) map[int]float64 {
+	values := make(map[int]float64, len(runs))
+	for _, run := range runs {
+		if row.id == metricPhysicalFootprint && !run.PhysicalFootprintValid {
+			continue
+		}
+		value := row.run(run)
+		if finiteNumber(value) {
+			values[run.Index] = value
+		}
+	}
+	return values
+}
+
 func samplingReliable(
 	baseline, candidate model.Benchmark,
 	intervalSeconds float64,
@@ -71,63 +91,47 @@ func samplingReliable(
 		return true
 	}
 	for _, benchmark := range []model.Benchmark{baseline, candidate} {
-		if !benchmarkSamplesReliable(benchmark, intervalSeconds) {
+		if !model.SamplingReliable(benchmark, intervalSeconds) {
 			return false
 		}
 	}
 	return true
 }
 
-func benchmarkSamplesReliable(benchmark model.Benchmark, intervalSeconds float64) bool {
-	if len(benchmark.Runs) == 0 {
-		return false
-	}
-	if intervalSeconds <= 0 {
-		return true
-	}
-	minimum := intervalSeconds * 2
-	for _, run := range benchmark.Runs {
-		if run.WallSeconds < minimum || run.SampleCount < 2 ||
-			run.SampleCoverageSeconds < intervalSeconds {
-			return false
-		}
-	}
-	return true
-}
-
-func pairedValues(
-	baseline, candidate []model.Run,
-	pick func(model.Run) float64,
-	valid func(model.Run) bool,
-) ([]float64, []float64, []float64) {
-	baselineByIndex := make(map[int]float64, len(baseline))
-	for _, run := range baseline {
-		if valid(run) {
-			value := pick(run)
-			if finiteChartValue(value) {
-				baselineByIndex[run.Index] = value
-			}
-		}
-	}
-	baseValues := make([]float64, 0, len(candidate))
-	candidateValues := make([]float64, 0, len(candidate))
+func pairedDifferences(
+	baseline map[int]float64,
+	candidate []model.Run,
+	row metricDefinition,
+) (float64, float64, []float64) {
 	differences := make([]float64, 0, len(candidate))
+	baseMean, candidateMean := 0.0, 0.0
+	count := 0
 	for _, run := range candidate {
-		if !valid(run) {
+		if row.id == metricPhysicalFootprint && !run.PhysicalFootprintValid {
 			continue
 		}
-		value, ok := baselineByIndex[run.Index]
+		value, ok := baseline[run.Index]
 		if ok {
-			candidateValue := pick(run)
-			if !finiteChartValue(candidateValue) {
+			candidateValue := row.run(run)
+			if !finiteNumber(candidateValue) {
 				continue
 			}
-			baseValues = append(baseValues, value)
-			candidateValues = append(candidateValues, candidateValue)
+			count++
+			baseMean = runningMean(baseMean, value, count)
+			candidateMean = runningMean(candidateMean, candidateValue, count)
 			differences = append(differences, candidateValue-value)
 		}
 	}
-	return baseValues, candidateValues, differences
+	return baseMean, candidateMean, differences
+}
+
+func runningMean(mean, value float64, count int) float64 {
+	n := float64(count)
+	mean = mean*(1-1/n) + value/n
+	if math.IsInf(mean, 0) {
+		return math.Copysign(math.MaxFloat64, mean)
+	}
+	return mean
 }
 
 func comparisonStatus(stats model.Stats, direction metricDirection) (string, string) {
@@ -155,7 +159,7 @@ func comparisonStatus(stats model.Stats, direction metricDirection) (string, str
 	return "inconclusive", "uncertain"
 }
 
-func formatDelta(delta deltaResult, row metricRow) string {
+func formatDelta(delta deltaResult) string {
 	change := "Δ n/a"
 	if delta.percentAvailable {
 		change = "Δ " + formatSignedPercent(delta.percent)
@@ -163,7 +167,7 @@ func formatDelta(delta deltaResult, row metricRow) string {
 	return change + " · " + delta.status
 }
 
-func formatDeltaInterval(delta deltaResult, row metricRow) string {
+func formatDeltaInterval(delta deltaResult, row metricDefinition) string {
 	if !delta.difference.CI95Valid {
 		return "insufficient paired runs"
 	}

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func BenchmarkSampleTree(b *testing.B) {
+func BenchmarkSampleProcessGroup(b *testing.B) {
 	command := exec.Command("sleep", "60")
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := command.Start(); err != nil {
@@ -19,7 +19,7 @@ func BenchmarkSampleTree(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		if _, valid := SampleTree(command.Process.Pid); !valid {
+		if _, valid := SampleProcessGroup(command.Process.Pid); !valid {
 			b.Fatal("sampled process disappeared")
 		}
 	}

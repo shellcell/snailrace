@@ -53,7 +53,7 @@ func measurementTrendChart(report model.Report, benchmarkIndex int, group chartG
 	}
 	body.Grow(1536 + len(runs)*metricCount*96)
 	toolLabel := reportToolLabel(report, benchmarkIndex)
-	toolColorHex := toolColor(report, benchmarkIndex)
+	toolColorHex := toolColor(benchmarkIndex)
 	body.WriteString(svgChartStyle)
 	fmt.Fprintf(
 		&body,
@@ -92,17 +92,17 @@ func measurementTrendChart(report model.Report, benchmarkIndex int, group chartG
 			left, bottom+18, right, bottom+18, len(runs),
 		)
 		for metricIndex, metric := range lane.metrics {
-			values := trendValues(runs, metric)
-			minimum, maximum := valueRange(values)
-			color := style.Tool(metric.row).Hex
+			minimum, maximum := trendMetricRange(runs, metric)
+			color := style.Tool(int(metric.id)).Hex
 			var path strings.Builder
-			path.Grow(len(values) * 20)
+			path.Grow(len(runs) * 20)
 			started := false
-			for index, value := range values {
-				if !finiteChartValue(value) {
+			for index, run := range runs {
+				if !chartRunAvailable(metric, run) {
 					started = false
 					continue
 				}
+				value := metric.run(run)
 				command := "L"
 				if !started {
 					command = "M"
@@ -120,10 +120,11 @@ func measurementTrendChart(report model.Report, benchmarkIndex int, group chartG
 				`<path class="trend-line" d="%s" fill="none" stroke="%s" stroke-width="2"/>`,
 				path.String(), color,
 			)
-			for index, value := range values {
-				if !finiteChartValue(value) {
+			for index, run := range runs {
+				if !chartRunAvailable(metric, run) {
 					continue
 				}
+				value := metric.run(run)
 				body.WriteString(`<circle class="trend-dot" cx="`)
 				writeChartFloat(&body, x(index))
 				body.WriteString(`" cy="`)
@@ -137,7 +138,7 @@ func measurementTrendChart(report model.Report, benchmarkIndex int, group chartG
 				&body,
 				`<text x="520" y="%d" class="label" style="fill:%s">%s</text>`+
 					`<text x="520" y="%d" class="value">%s ... %s</text>`,
-				legendY, color, html.EscapeString(clip(metric.name, 24)), legendY+12,
+				legendY, color, html.EscapeString(clip(metric.chartName, 24)), legendY+12,
 				metric.format(minimum), metric.format(maximum),
 			)
 		}
@@ -150,24 +151,13 @@ func measurementTrendChart(report model.Report, benchmarkIndex int, group chartG
 	}
 }
 
-func trendValues(runs []model.Run, metric chartMetric) []float64 {
-	values := make([]float64, len(runs))
-	for index, run := range runs {
-		if chartRunAvailable(metric, run) {
-			values[index] = metric.run(run)
-		} else {
-			values[index] = math.NaN()
-		}
-	}
-	return values
-}
-
-func valueRange(values []float64) (float64, float64) {
+func trendMetricRange(runs []model.Run, metric chartMetric) (float64, float64) {
 	minimum, maximum := math.Inf(1), math.Inf(-1)
-	for _, value := range values {
-		if !finiteChartValue(value) {
+	for _, run := range runs {
+		if !chartRunAvailable(metric, run) {
 			continue
 		}
+		value := metric.run(run)
 		minimum = math.Min(minimum, value)
 		maximum = math.Max(maximum, value)
 	}
@@ -197,37 +187,41 @@ func trendLaneRange(runs []model.Run, metrics []chartMetric) (float64, float64) 
 
 func trendLanes(report model.Report, benchmarkIndex int, group chartGroup) []trendLane {
 	metrics := trendMetrics(report, benchmarkIndex, group.metrics)
-	byRow := make(map[int]chartMetric, len(metrics))
+	byRow := make(map[metricID]chartMetric, len(metrics))
 	for _, metric := range metrics {
-		byRow[metric.row] = metric
+		byRow[metric.id] = metric
 	}
 	switch group.name {
 	case "PERFORMANCE":
-		return trendLaneDefinitions(byRow, trendLaneSpec{"Wall time", []int{0}})
+		return trendLaneDefinitions(byRow, trendLaneSpec{"Wall time", []metricID{metricWall}})
 	case "CPU COST":
 		return trendLaneDefinitions(
 			byRow,
-			trendLaneSpec{"CPU time", []int{1, 2, 3}},
-			trendLaneSpec{"Average CPU", []int{4}},
+			trendLaneSpec{"CPU time", []metricID{metricCPUTotal, metricCPUUser, metricCPUSystem}},
+			trendLaneSpec{"Average CPU", []metricID{metricAverageCPU}},
 		)
 	case "MEMORY COST":
 		return trendLaneDefinitions(
 			byRow,
-			trendLaneSpec{"Resident memory", []int{7, 6, 5}},
-			trendLaneSpec{"Physical footprint", []int{8}},
-			trendLaneSpec{"Virtual memory", []int{9}},
+			trendLaneSpec{"Resident memory", []metricID{
+				metricOSMaxRSS, metricPeakResident, metricMeanResident,
+			}},
+			trendLaneSpec{"Physical footprint", []metricID{metricPhysicalFootprint}},
+			trendLaneSpec{"Virtual memory", []metricID{metricPeakVirtual}},
 		)
 	case "PROCESS STRUCTURE":
 		return trendLaneDefinitions(
 			byRow,
-			trendLaneSpec{"Processes and threads", []int{11, 10}},
-			trendLaneSpec{"FD references", []int{12}},
+			trendLaneSpec{"Processes and threads", []metricID{
+				metricPeakThreads, metricPeakProcesses,
+			}},
+			trendLaneSpec{"FD references", []metricID{metricPeakFDs}},
 		)
 	default:
 		lanes := make([]trendLane, 0, len(metrics))
 		for _, metric := range metrics {
 			lanes = append(lanes, trendLane{
-				name: metric.name, metrics: []chartMetric{metric}, format: metric.format,
+				name: metric.chartName, metrics: []chartMetric{metric}, format: metric.format,
 			})
 		}
 		return lanes
@@ -236,10 +230,10 @@ func trendLanes(report model.Report, benchmarkIndex int, group chartGroup) []tre
 
 type trendLaneSpec struct {
 	name string
-	rows []int
+	rows []metricID
 }
 
-func trendLaneDefinitions(byRow map[int]chartMetric, specs ...trendLaneSpec) []trendLane {
+func trendLaneDefinitions(byRow map[metricID]chartMetric, specs ...trendLaneSpec) []trendLane {
 	lanes := make([]trendLane, 0, len(specs))
 	for _, spec := range specs {
 		metrics := make([]chartMetric, 0, len(spec.rows))
@@ -261,9 +255,9 @@ func trendMetrics(
 ) []chartMetric {
 	result := make([]chartMetric, 0, len(metrics))
 	for _, metric := range metrics {
-		stats := metricRows[metric.row].stats(report.Benchmarks[benchmarkIndex].Summary)
-		if stats.N > 0 && finiteChartValue(stats.Mean) && availableFor(
-			metricRows[metric.row], report.Host.OS,
+		stats := metric.stats(report.Benchmarks[benchmarkIndex].Summary)
+		if stats.N > 0 && finiteNumber(stats.Mean) && availableFor(
+			metric, report.Host.OS,
 			report.Benchmarks[benchmarkIndex].Summary,
 		) {
 			result = append(result, metric)
@@ -320,7 +314,7 @@ func trendLaneNames(lanes []trendLane) string {
 func trendMetricNames(metrics []chartMetric) string {
 	names := make([]string, 0, len(metrics))
 	for _, metric := range metrics {
-		names = append(names, metric.name)
+		names = append(names, metric.chartName)
 	}
 	return strings.Join(names, ", ")
 }

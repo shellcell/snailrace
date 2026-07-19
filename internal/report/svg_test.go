@@ -24,7 +24,7 @@ func TestSVGIsStandaloneCompleteReport(t *testing.T) {
 		Notes: []string{"No outliers removed."},
 	}
 	var output bytes.Buffer
-	if err := writeSVG(&output, report); err != nil {
+	if err := writeSVG(&output, NewRenderer(report)); err != nil {
 		t.Fatal(err)
 	}
 	decoder := xml.NewDecoder(bytes.NewReader(output.Bytes()))
@@ -51,12 +51,13 @@ func TestMarkdownReferencesSeparateSVGCharts(t *testing.T) {
 			benchmarkWithWallTimes("candidate", 9, 9),
 		},
 	}
-	charts, err := WriteChartFiles(t.TempDir(), report, false)
+	renderer := NewRenderer(report)
+	charts, err := renderer.WriteChartFiles(t.TempDir(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var output bytes.Buffer
-	if err := WriteMarkdownWithCharts(&output, report, charts, "charts"); err != nil {
+	if err := renderer.WriteMarkdownWithCharts(&output, charts, "charts"); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(output.String(), "<svg") || !strings.Contains(output.String(), ".svg)") {

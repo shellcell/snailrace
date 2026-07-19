@@ -9,16 +9,16 @@ import (
 
 func includedDimensionsFromRanking(ranking rankingData) []string {
 	var result []string
-	if ranking.indexPrimary {
+	if ranking.IndexPrimary {
 		result = append(result, "time")
 	}
-	if ranking.indexCPU {
+	if ranking.IndexCPU {
 		result = append(result, "cpu")
 	}
-	if ranking.indexRAM {
+	if ranking.IndexRAM {
 		result = append(result, "ram")
 	}
-	if ranking.indexFootprint {
+	if ranking.IndexFootprint {
 		result = append(result, "disk")
 	}
 	return result
@@ -39,7 +39,7 @@ func reliabilityCaveats(report model.Report) []string {
 			result = append(result, benchmark.Tool.Name+
 				": post-run executable verification was not completed")
 		}
-		if !benchmarkSamplesReliable(benchmark, interval) {
+		if !model.SamplingReliable(benchmark, interval) {
 			result = append(result, fmt.Sprintf(
 				"%s: sampled process metrics are limited by sparse observations",
 				benchmark.Tool.Name,

@@ -57,12 +57,8 @@ th:first-child,td:first-child{text-align:left}code{color:var(--accent);white-spa
 .command-item{grid-template-columns:1fr}}
 </style></head><body><main>`
 
-func writeHTML(writer io.Writer, report model.Report) error {
-	return writeHTMLRenderer(writer, NewRenderer(report))
-}
-
-func writeHTMLRenderer(writer io.Writer, renderer *Renderer) error {
-	report := renderer.report
+func writeHTML(writer io.Writer, renderer *Renderer) error {
+	report := renderer.displayReport
 	checked := newErrorWriter(writer)
 	writer = checked
 	fmt.Fprint(writer, htmlStart)
@@ -86,7 +82,7 @@ func writeHTMLRenderer(writer io.Writer, renderer *Renderer) error {
 	writeHTMLCommandLegend(writer, report)
 	writeHTMLFailures(writer, report)
 	if len(report.Benchmarks) > 1 {
-		writeHTMLRankingWith(writer, report, renderer.ranking)
+		writeHTMLRanking(writer, report, renderer.ranking)
 	}
 	charts := renderer.reportCharts()
 	for _, section := range chartSections(charts) {
@@ -246,7 +242,7 @@ func writeHTMLBenchmark(
 		formatCount(benchmark.Summary.ValidSampleCount.Mean),
 		formatDuration(benchmark.Summary.SampleCoverageSeconds.Mean),
 	)
-	if !benchmarkSamplesReliable(benchmark, report.Config.IntervalMS/1000) {
+	if !model.SamplingReliable(benchmark, report.Config.IntervalMS/1000) {
 		fmt.Fprint(
 			writer,
 			`<p class="uncertain">Sampling quality: LIMITED `+
@@ -256,7 +252,7 @@ func writeHTMLBenchmark(
 	fmt.Fprint(writer, `<div class="scroll"><table><thead><tr><th>Metric</th>`+
 		`<th>Mean ± σ</th><th>95% CI mean</th><th>Median</th>`+
 		`<th>P95</th><th>Range</th></tr></thead><tbody>`)
-	for _, row := range metricRows {
+	for _, row := range metricCatalog {
 		writeHTMLRow(writer, operatingSystem, row, benchmark.Summary)
 	}
 	fmt.Fprint(writer, "</tbody></table></div>")
@@ -270,7 +266,7 @@ func writeHTMLBenchmark(
 func writeHTMLRow(
 	writer io.Writer,
 	operatingSystem string,
-	row metricRow,
+	row metricDefinition,
 	summary model.Summary,
 ) {
 	if !availableFor(row, operatingSystem, summary) {

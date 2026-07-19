@@ -69,10 +69,14 @@ func TestProgressSummariesMatchFinalStatistics(t *testing.T) {
 			PeakPhysicalFootprintBytes: 200, PhysicalFootprintValid: true},
 	}
 	var estimates []model.Summary
+	var raceEstimates []*model.Summary
 	tracker := newProgressTracker(
 		Options{Progress: func(event ProgressEvent) {
 			if event.HasEstimate {
 				estimates = append(estimates, event.Estimate)
+			}
+			if len(event.Estimates) > 0 && event.Estimates[0].Estimate != nil {
+				raceEstimates = append(raceEstimates, event.Estimates[0].Estimate)
 			}
 		}},
 		[]Spec{{Name: "tool"}}, Config{Runs: len(runs), Interval: time.Millisecond},
@@ -91,5 +95,8 @@ func TestProgressSummariesMatchFinalStatistics(t *testing.T) {
 	}
 	if estimates[0].PeakPhysicalFootprintBytes.Mean != 300 {
 		t.Fatal("earlier progress event was mutated by a later update")
+	}
+	if raceEstimates[0].WallSeconds.Mean != 3 {
+		t.Fatal("earlier race estimate was mutated by a later update")
 	}
 }

@@ -8,21 +8,12 @@ import (
 	"github.com/shellcell/snailrace/internal/model"
 )
 
-func WriteMarkdownWithCharts(
-	writer io.Writer,
-	report model.Report,
-	charts []ChartArtifact,
-	chartDirectory string,
-) error {
-	return NewRenderer(report).WriteMarkdownWithCharts(writer, charts, chartDirectory)
-}
-
 func (renderer *Renderer) WriteMarkdownWithCharts(
 	writer io.Writer,
 	charts []ChartArtifact,
 	chartDirectory string,
 ) error {
-	report := renderer.report
+	report := renderer.displayReport
 	checked := newErrorWriter(writer)
 	writer = checked
 	fmt.Fprintf(
@@ -104,7 +95,7 @@ func writeMarkdownBenchmark(
 		formatCount(benchmark.Summary.ValidSampleCount.Mean),
 		formatDuration(benchmark.Summary.SampleCoverageSeconds.Mean),
 	)
-	if !benchmarkSamplesReliable(benchmark, intervalSeconds) {
+	if !model.SamplingReliable(benchmark, intervalSeconds) {
 		fmt.Fprintln(
 			writer,
 			"> Sampling quality: **LIMITED** (fewer than two valid samples or intervals).",
@@ -116,7 +107,7 @@ func writeMarkdownBenchmark(
 		"| Metric | Mean ± σ | 95% CI mean | Median | P95 | Range |",
 	)
 	fmt.Fprintln(writer, "|---|---:|---:|---:|---:|---:|")
-	for _, row := range metricRows {
+	for _, row := range metricCatalog {
 		if !availableFor(row, operatingSystem, benchmark.Summary) {
 			fmt.Fprintf(writer, "| %s | N/A | N/A | N/A | N/A | N/A |\n", row.name)
 			continue

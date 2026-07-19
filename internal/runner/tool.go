@@ -17,15 +17,22 @@ import (
 )
 
 type toolInspector struct {
-	cache     map[string]model.ToolInfo
-	hashCache map[string]string
-	fileCache map[string]os.FileInfo
+	cache       map[string]model.ToolInfo
+	hashCache   map[string]string
+	fileCache   map[string]os.FileInfo
+	linkedFiles func(context.Context, string) ([]platform.LinkedDependency, error)
 }
 
 func newToolInspector() *toolInspector {
+	return newToolInspectorWith(platform.LinkedFiles)
+}
+
+func newToolInspectorWith(
+	linkedFiles func(context.Context, string) ([]platform.LinkedDependency, error),
+) *toolInspector {
 	return &toolInspector{
 		cache: make(map[string]model.ToolInfo), hashCache: make(map[string]string),
-		fileCache: make(map[string]os.FileInfo),
+		fileCache: make(map[string]os.FileInfo), linkedFiles: linkedFiles,
 	}
 }
 
@@ -76,7 +83,7 @@ func (inspector *toolInspector) inspect(
 	}
 	tool.SizeBytes = info.Size()
 	inspector.fileCache[executable] = info
-	dependencies, err := platform.LinkedFiles(ctx, executable)
+	dependencies, err := inspector.linkedFiles(ctx, executable)
 	if err != nil {
 		return model.ToolInfo{}, err
 	}

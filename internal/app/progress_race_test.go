@@ -18,7 +18,7 @@ var progressColorSequence = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 func TestProgressRaceAdvancesBetterExpectedTool(t *testing.T) {
 	event := runner.ProgressEvent{
-		Completed: 2, Total: 4, Elapsed: time.Second, ETA: time.Second,
+		Completed: 2, Total: 4, ETA: time.Second,
 		Estimates: []runner.ProgressEstimate{
 			progressEstimate("better", 1),
 			progressEstimate("worse", 2),
@@ -202,7 +202,7 @@ func progressEstimate(name string, scale float64) runner.ProgressEstimate {
 			MeanResidentBytes: scale, PeakResidentBytes: scale,
 		}},
 		DiskFootprintBytes: int64(scale * 100),
-		Estimate: model.Summary{
+		Estimate: &model.Summary{
 			WallSeconds: stats, CPUTotalSeconds: stats,
 			MeanResidentBytes: stats, PeakResidentBytes: stats,
 		},

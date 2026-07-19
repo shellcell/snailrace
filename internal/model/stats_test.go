@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"math"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -124,6 +125,72 @@ func TestStatsUnmarshalRejectsSingleObservationInterval(t *testing.T) {
 	}
 	if decoded.CI95Valid {
 		t.Fatal("one observation cannot have a confidence interval")
+	}
+}
+
+func TestSummaryAccumulatorMatchesBatchSummaryAtEveryPrefix(t *testing.T) {
+	runs := []Run{
+		{WallSeconds: 1, CPUUserSeconds: 2, CPUSystemSeconds: 3,
+			AverageCPUPercent: 4, PeakResidentBytes: 5, OSMaxRSSBytes: 6,
+			MeanResidentBytes: 7, PeakVirtualBytes: 8, PeakProcesses: 9,
+			PeakThreads: 10, PeakFileDescriptors: 11, SampleCount: 12,
+			SampleCoverageSeconds: 13},
+		{WallSeconds: 14, CPUUserSeconds: 15, CPUSystemSeconds: 16,
+			AverageCPUPercent: 17, PeakResidentBytes: 18,
+			PeakPhysicalFootprintBytes: 19, PhysicalFootprintValid: true,
+			OSMaxRSSBytes: 20, MeanResidentBytes: 21, PeakVirtualBytes: 22,
+			PeakProcesses: 23, PeakThreads: 24, PeakFileDescriptors: 25,
+			SampleCount: 26, SampleCoverageSeconds: 27},
+	}
+	accumulator := NewSummaryAccumulator(len(runs))
+	for index, run := range runs {
+		accumulator.Add(run)
+		got, want := accumulator.Snapshot(), independentSummary(runs[:index+1])
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("prefix %d summary mismatch:\ngot  %+v\nwant %+v", index+1, got, want)
+		}
+	}
+}
+
+func independentSummary(runs []Run) Summary {
+	values := func(pick func(Run) float64) []float64 {
+		result := make([]float64, len(runs))
+		for index, run := range runs {
+			result[index] = pick(run)
+		}
+		return result
+	}
+	physicalValues := make([]float64, 0, len(runs))
+	for _, run := range runs {
+		if run.PhysicalFootprintValid {
+			physicalValues = append(physicalValues, run.PeakPhysicalFootprintBytes)
+		}
+	}
+	var physical *Stats
+	if len(physicalValues) > 0 {
+		value := CalculateStats(physicalValues)
+		physical = &value
+	}
+	return Summary{
+		WallSeconds: CalculateStats(values(func(run Run) float64 { return run.WallSeconds })),
+		CPUTotalSeconds: CalculateStats(values(func(run Run) float64 {
+			return run.CPUUserSeconds + run.CPUSystemSeconds
+		})),
+		CPUUserSeconds:             CalculateStats(values(func(run Run) float64 { return run.CPUUserSeconds })),
+		CPUSystemSeconds:           CalculateStats(values(func(run Run) float64 { return run.CPUSystemSeconds })),
+		AverageCPUPercent:          CalculateStats(values(func(run Run) float64 { return run.AverageCPUPercent })),
+		PeakResidentBytes:          CalculateStats(values(func(run Run) float64 { return run.PeakResidentBytes })),
+		PeakPhysicalFootprintBytes: physical,
+		OSMaxRSSBytes:              CalculateStats(values(func(run Run) float64 { return run.OSMaxRSSBytes })),
+		MeanResidentBytes:          CalculateStats(values(func(run Run) float64 { return run.MeanResidentBytes })),
+		PeakVirtualBytes:           CalculateStats(values(func(run Run) float64 { return run.PeakVirtualBytes })),
+		PeakProcesses:              CalculateStats(values(func(run Run) float64 { return run.PeakProcesses })),
+		PeakThreads:                CalculateStats(values(func(run Run) float64 { return run.PeakThreads })),
+		PeakFileDescriptors:        CalculateStats(values(func(run Run) float64 { return run.PeakFileDescriptors })),
+		ValidSampleCount:           CalculateStats(values(func(run Run) float64 { return float64(run.SampleCount) })),
+		SampleCoverageSeconds: CalculateStats(values(func(run Run) float64 {
+			return run.SampleCoverageSeconds
+		})),
 	}
 }
 

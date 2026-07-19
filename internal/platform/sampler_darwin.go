@@ -22,15 +22,10 @@ import "C"
 
 import (
 	"syscall"
-	"time"
 	"unsafe"
 )
 
-func DefaultInterval() time.Duration { return 10 * time.Millisecond }
-
-func SampleImmediately() bool { return true }
-
-func SampleTree(rootPID int) (Metrics, bool) {
+func SampleProcessGroup(rootPID int) (Metrics, bool) {
 	pids := processGroupPIDs(rootPID)
 	var total Metrics
 	foundRoot := false

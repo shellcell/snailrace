@@ -78,14 +78,14 @@ func progressScores(event runner.ProgressEvent) []float64 {
 	benchmarks := make([]model.Benchmark, 0, len(event.Estimates))
 	positions := make([]int, 0, len(event.Estimates))
 	for index, tool := range event.Estimates {
-		if !tool.HasEstimate {
+		if !tool.HasEstimate || tool.Estimate == nil {
 			continue
 		}
 		benchmarks = append(benchmarks, model.Benchmark{
 			Tool: model.ToolInfo{
 				Name: tool.ToolName, DiskFootprintBytes: tool.DiskFootprintBytes,
 			},
-			Runs: tool.Runs, Summary: tool.Estimate,
+			Runs: tool.Runs, Summary: *tool.Estimate,
 		})
 		positions = append(positions, index)
 	}
@@ -105,7 +105,7 @@ func progressTrailCharacters(tools []runner.ProgressEstimate) []string {
 	minimum := math.Inf(1)
 	values := make([]float64, len(tools))
 	for index, tool := range tools {
-		if !tool.HasEstimate {
+		if !tool.HasEstimate || tool.Estimate == nil {
 			continue
 		}
 		mean := tool.Estimate.MeanResidentBytes.Mean

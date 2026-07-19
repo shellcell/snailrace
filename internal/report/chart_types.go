@@ -9,7 +9,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/shellcell/snailrace/internal/model"
 	"github.com/shellcell/snailrace/internal/style"
 )
 
@@ -32,13 +31,7 @@ type svgChart struct {
 	height      int
 }
 
-type chartMetric struct {
-	name   string
-	format func(float64) string
-	stats  func(model.Benchmark) model.Stats
-	run    func(model.Run) float64
-	row    int
-}
+type chartMetric = metricDefinition
 
 type chartGroup struct {
 	name    string
@@ -61,7 +54,8 @@ func (chart svgChart) writeHTML(writer io.Writer) {
 		chartWidth, chart.height, chartWidth,
 	)
 	chart.writeMetadata(writer)
-	fmt.Fprint(writer, chart.body, `</svg>`)
+	writeChartString(writer, chart.body)
+	writeChartString(writer, `</svg>`)
 }
 
 func (chart svgChart) writeEmbedded(writer io.Writer, x, y int) {
@@ -72,7 +66,16 @@ func (chart svgChart) writeEmbedded(writer io.Writer, x, y int) {
 		x, y, chartWidth, chart.height, chartWidth, chart.height,
 	)
 	chart.writeMetadata(writer)
-	fmt.Fprint(writer, chart.body, `</svg>`)
+	writeChartString(writer, chart.body)
+	writeChartString(writer, `</svg>`)
+}
+
+func writeChartString(writer io.Writer, value string) {
+	if stringWriter, ok := writer.(io.StringWriter); ok {
+		_, _ = stringWriter.WriteString(value)
+		return
+	}
+	_, _ = fmt.Fprint(writer, value)
 }
 
 func (chart svgChart) writeMetadata(writer io.Writer) {
@@ -96,11 +99,7 @@ func (chart svgChart) explanation() string {
 	return chart.accessibleTitle()
 }
 
-func chartColor(index, _ int) string {
-	return style.Tool(index).Hex
-}
-
-func toolColor(_ model.Report, index int) string {
+func toolColor(index int) string {
 	return style.Tool(index).Hex
 }
 
@@ -146,7 +145,7 @@ func niceDeltaScale(value float64) float64 {
 	}
 }
 
-func finiteChartValue(value float64) bool {
+func finiteNumber(value float64) bool {
 	return !math.IsNaN(value) && !math.IsInf(value, 0)
 }
 

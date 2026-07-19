@@ -4,43 +4,45 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/shellcell/snailrace/internal/model"
+	"github.com/shellcell/snailrace/internal/report"
 )
-
-func reportPath(directory, format string, report model.Report) string {
-	return reportPathWithStem(directory, format, reportStem(report))
-}
 
 func reportPathWithStem(directory, format, stem string) string {
 	extension := strings.ToLower(format)
-	switch extension {
-	case "text":
-		extension = "txt"
-	case "markdown":
-		extension = "md"
+	if info, ok := report.LookupFormat(format); ok {
+		extension = info.Extension
 	}
 	return filepath.Join(directory, stem+"."+extension)
 }
 
 func reportStem(report model.Report) string {
-	tool := reportLabel(report.Benchmarks)
-	timestamp := report.MeasuredAt.Format("20060102-150405")
+	names := make([]string, len(report.Benchmarks))
+	for index, benchmark := range report.Benchmarks {
+		names[index] = benchmark.Tool.Name
+	}
+	return reportStemFor(report.MeasuredAt, names)
+}
+
+func reportStemFor(measuredAt time.Time, toolNames []string) string {
+	tool := reportLabelNames(toolNames)
+	timestamp := measuredAt.Format("20060102-150405")
 	return fmt.Sprintf("snail-%s-%s", tool, timestamp)
 }
 
-func reportLabel(benchmarks []model.Benchmark) string {
-	if len(benchmarks) == 0 {
+func reportLabelNames(names []string) string {
+	if len(names) == 0 {
 		return "unknown"
 	}
-	if len(benchmarks) == 1 {
-		return slug(benchmarks[0].Tool.Name)
+	if len(names) == 1 {
+		return slug(names[0])
 	}
-	label := slug(benchmarks[0].Tool.Name) + "-vs-" +
-		slug(benchmarks[1].Tool.Name)
-	if len(benchmarks) > 2 {
-		label += fmt.Sprintf("-and-%d", len(benchmarks)-2)
+	label := slug(names[0]) + "-vs-" + slug(names[1])
+	if len(names) > 2 {
+		label += fmt.Sprintf("-and-%d", len(names)-2)
 	}
 	return label
 }

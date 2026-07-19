@@ -8,7 +8,7 @@ import (
 )
 
 func TestPairedComparisonRequiresConfidence(t *testing.T) {
-	row := metricRows[0]
+	row := metricCatalog[metricWall]
 	baseline := benchmarkWithWallTimes("baseline", 10, 10, 10)
 	better := benchmarkWithWallTimes("better", 8, 8, 8)
 	delta := compareMetric(baseline, better, row, 0)
@@ -27,7 +27,7 @@ func TestSinglePairIsInconclusive(t *testing.T) {
 	delta := compareMetric(
 		benchmarkWithWallTimes("baseline", 10),
 		benchmarkWithWallTimes("candidate", 5),
-		metricRows[0], 0,
+		metricCatalog[metricWall], 0,
 	)
 	if delta.status != "inconclusive" {
 		t.Fatalf("status = %q, want inconclusive", delta.status)
@@ -38,9 +38,9 @@ func TestZeroBaselineDeltaIsUnavailable(t *testing.T) {
 	delta := compareMetric(
 		benchmarkWithWallTimes("baseline", 0, 0),
 		benchmarkWithWallTimes("candidate", 1, 1),
-		metricRows[0], 0,
+		metricCatalog[metricWall], 0,
 	)
-	if got := formatDelta(delta, metricRows[0]); got != "Δ n/a · worse" {
+	if got := formatDelta(delta); got != "Δ n/a · worse" {
 		t.Fatalf("delta = %q, want unavailable percentage", got)
 	}
 	if got, _ := compareStaticCost(0, 100); got != "Δ n/a · worse" {
@@ -57,7 +57,7 @@ func TestShortRunsMarkSampledMetricsAsLimited(t *testing.T) {
 	}
 	baseline.Summary = model.Summarize(baseline.Runs)
 	candidate.Summary = model.Summarize(candidate.Runs)
-	delta := compareMetric(baseline, candidate, metricRows[5], 0.01)
+	delta := compareMetric(baseline, candidate, metricCatalog[metricMeanResident], 0.01)
 	if delta.status != "sampling-limited" {
 		t.Fatalf("status = %q, want sampling-limited", delta.status)
 	}
@@ -74,7 +74,7 @@ func TestTooFewValidSamplesMarksMetricsAsLimited(t *testing.T) {
 	}
 	baseline.Summary = model.Summarize(baseline.Runs)
 	candidate.Summary = model.Summarize(candidate.Runs)
-	delta := compareMetric(baseline, candidate, metricRows[5], 0.01)
+	delta := compareMetric(baseline, candidate, metricCatalog[metricMeanResident], 0.01)
 	if delta.status != "sampling-limited" {
 		t.Fatalf("status = %q, want sampling-limited", delta.status)
 	}
@@ -91,7 +91,7 @@ func TestPhysicalFootprintComparisonExcludesInvalidPairs(t *testing.T) {
 	}
 	baseline := model.Benchmark{Runs: baselineRuns, Summary: model.Summarize(baselineRuns)}
 	candidate := model.Benchmark{Runs: candidateRuns, Summary: model.Summarize(candidateRuns)}
-	result := compareMetric(baseline, candidate, metricRows[8], 0)
+	result := compareMetric(baseline, candidate, metricCatalog[metricPhysicalFootprint], 0)
 	if result.difference.N != 1 || result.difference.Mean != -10 {
 		t.Fatalf("physical footprint difference = %+v", result.difference)
 	}
@@ -107,7 +107,7 @@ func TestComparisonDropsPairWithNonFiniteValue(t *testing.T) {
 	result := compareMetric(
 		model.Benchmark{Runs: baselineRuns, Summary: model.Summarize(baselineRuns)},
 		model.Benchmark{Runs: candidateRuns, Summary: model.Summarize(candidateRuns)},
-		metricRows[0], 0,
+		metricCatalog[metricWall], 0,
 	)
 	if result.difference.N != 0 || result.percentAvailable {
 		t.Fatalf("non-finite pair produced a comparison: %+v", result)

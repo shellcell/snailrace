@@ -17,47 +17,43 @@ type rankingChartMetric struct {
 	rank   func(rankingRow) int
 }
 
-func rankingCharts(report model.Report) []svgChart {
-	return rankingChartsWith(report, calculateRanking(report))
-}
-
-func rankingChartsWith(report model.Report, ranking rankingData) []svgChart {
-	if len(ranking.rows) == 0 {
+func rankingCharts(report model.Report, ranking rankingData) []svgChart {
+	if len(ranking.Rows) == 0 {
 		return nil
 	}
 	var metrics []rankingChartMetric
-	if ranking.available {
+	if ranking.Available {
 		metrics = append(metrics, rankingChartMetric{"BALANCED INDEX", formatScore,
-			func(row rankingRow) float64 { return row.overallScore },
-			func(row rankingRow) int { return row.overallRank }})
+			func(row rankingRow) float64 { return row.OverallScore },
+			func(row rankingRow) int { return row.OverallRank }})
 	}
 	metrics = append(metrics, rankingChartMetric{ranking.primaryLabel, ranking.primaryUnit,
-		func(row rankingRow) float64 { return row.primaryValue },
-		func(row rankingRow) int { return row.primaryRank }})
-	if !(report.Config.Mode == "tui" && report.Config.DurationSeconds > 0) {
+		func(row rankingRow) float64 { return row.PrimaryValue },
+		func(row rankingRow) int { return row.PrimaryRank }})
+	if !report.Config.FixedDurationTUI() {
 		metrics = append(metrics, rankingChartMetric{
 			"CPU COST", formatDuration,
-			func(row rankingRow) float64 { return row.cpuValue },
-			func(row rankingRow) int { return row.cpuRank },
+			func(row rankingRow) float64 { return row.CPUValue },
+			func(row rankingRow) int { return row.CPURank },
 		})
 	}
-	if ranking.ramPresent {
-		ramRank := func(row rankingRow) int { return row.ramRank }
-		if !ranking.ramAvailable {
+	if ranking.RAMPresent {
+		ramRank := func(row rankingRow) int { return row.RAMRank }
+		if !ranking.RAMAvailable {
 			// Sampling-limited RAM has no reliable score; rank descriptively by value.
-			order := rankByValue(ranking.rows, func(row rankingRow) float64 { return row.ramValue })
-			ramRank = func(row rankingRow) int { return order[row.benchmark] }
+			order := rankByValue(ranking.Rows, func(row rankingRow) float64 { return row.RAMValue })
+			ramRank = func(row rankingRow) int { return order[row.Benchmark] }
 		}
 		metrics = append(metrics, rankingChartMetric{
 			"RAM AGGREGATE", formatBytes,
-			func(row rankingRow) float64 { return row.ramValue },
+			func(row rankingRow) float64 { return row.RAMValue },
 			ramRank,
 		})
 	}
 	metrics = append(metrics, rankingChartMetric{
 		"LINKED SIZE", formatBytes,
-		func(row rankingRow) float64 { return row.footprintValue },
-		func(row rankingRow) int { return row.footprintRank },
+		func(row rankingRow) float64 { return row.FootprintValue },
+		func(row rankingRow) int { return row.FootprintRank },
 	})
 	charts := make([]svgChart, 0, len(metrics))
 	for _, metric := range metrics {
@@ -77,7 +73,7 @@ func rankByValue(rows []rankingRow, value func(rankingRow) float64) map[int]int 
 		if position == 0 || value(row) != value(ordered[position-1]) {
 			rank = position + 1
 		}
-		result[row.benchmark] = rank
+		result[row.Benchmark] = rank
 	}
 	return result
 }
@@ -89,9 +85,9 @@ func rankingBarChart(
 ) svgChart {
 	const left, plotWidth, rowHeight = 205, 355, 30
 	maximum := 0.0
-	for _, row := range ranking.rows {
+	for _, row := range ranking.Rows {
 		value := metric.value(row)
-		if !finiteChartValue(value) || value < 0 {
+		if !finiteNumber(value) || value < 0 {
 			return svgChart{}
 		}
 		maximum = math.Max(maximum, value)
@@ -99,11 +95,11 @@ func rankingBarChart(
 	if maximum <= 0 {
 		maximum = 1
 	}
-	height := 62 + len(ranking.rows)*rowHeight
+	height := 62 + len(ranking.Rows)*rowHeight
 	var body strings.Builder
 	body.WriteString(svgChartStyle)
 	subtitle := "descriptive point estimates · outline = category leader"
-	if metric.name == "RAM AGGREGATE" && ranking.ramPresent && !ranking.ramAvailable {
+	if metric.name == "RAM AGGREGATE" && ranking.RAMPresent && !ranking.RAMAvailable {
 		subtitle = "sampling-limited · descriptive only · excluded from balanced index"
 		if ranking.samplingInterval != "" {
 			subtitle += " · lower -interval (now " + ranking.samplingInterval + ")"
@@ -116,7 +112,7 @@ func rankingBarChart(
 			`<text x="16" y="41" class="subtitle">%s</text>`,
 		html.EscapeString(metric.name), html.EscapeString(subtitle),
 	)
-	rows := append([]rankingRow(nil), ranking.rows...)
+	rows := append([]rankingRow(nil), ranking.Rows...)
 	sort.SliceStable(rows, func(left, right int) bool {
 		return metric.rank(rows[left]) < metric.rank(rows[right])
 	})
@@ -124,7 +120,7 @@ func rankingBarChart(
 		y := 62 + index*rowHeight
 		value := metric.value(row)
 		width := value / maximum * plotWidth
-		color := toolColor(report, row.benchmark)
+		color := toolColor(row.Benchmark)
 		outline := "none"
 		outlineWidth := 0
 		if metric.rank(row) == 1 {
@@ -138,7 +134,7 @@ func rankingBarChart(
 				`fill="%s" stroke="%s" stroke-width="%d"/>`+
 				`<text x="575" y="%d" class="value">%s</text>`,
 			y, color, metric.rank(row),
-			html.EscapeString(clip(reportToolLabel(report, row.benchmark), 26)),
+			html.EscapeString(clip(reportToolLabel(report, row.Benchmark), 26)),
 			left, y-11, width, color, outline, outlineWidth, y, metric.format(value),
 		)
 	}
@@ -167,7 +163,7 @@ func rankingChartDescription(metric string, ranking rankingData) string {
 			"this ranking does not include uncertainty intervals."
 	case "RAM AGGREGATE":
 		caveat := ""
-		if ranking.ramPresent && !ranking.ramAvailable {
+		if ranking.RAMPresent && !ranking.RAMAvailable {
 			caveat = " These values are sampling-limited (short runs or too few valid " +
 				"samples), so they are shown for reference but excluded from the balanced index."
 			if ranking.samplingInterval != "" {
@@ -190,16 +186,16 @@ func rankingChartDescription(metric string, ranking rankingData) string {
 
 func balancedIndexCategories(ranking rankingData) string {
 	var categories []string
-	if ranking.indexPrimary {
+	if ranking.IndexPrimary {
 		categories = append(categories, primaryCategoryName(ranking.primaryLabel))
 	}
-	if ranking.indexCPU {
+	if ranking.IndexCPU {
 		categories = append(categories, "CPU cost")
 	}
-	if ranking.indexRAM {
+	if ranking.IndexRAM {
 		categories = append(categories, "RAM aggregate")
 	}
-	if ranking.indexFootprint {
+	if ranking.IndexFootprint {
 		categories = append(categories, "linked size")
 	}
 	if len(categories) == 0 {

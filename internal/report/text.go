@@ -11,19 +11,15 @@ import (
 	"github.com/shellcell/snailrace/internal/model"
 )
 
-func writeText(writer io.Writer, report model.Report) error {
-	return writeTextRenderer(writer, NewRenderer(report))
-}
-
-func writeTextRenderer(writer io.Writer, renderer *Renderer) error {
-	if !renderer.report.Verbose {
+func writeText(writer io.Writer, renderer *Renderer) error {
+	if !renderer.displayReport.Verbose {
 		return writeCompactText(writer, renderer)
 	}
 	return writeVerboseText(writer, renderer)
 }
 
 func writeVerboseText(writer io.Writer, renderer *Renderer) error {
-	report := renderer.report
+	report := renderer.displayReport
 	var output bytes.Buffer
 	w := tabwriter.NewWriter(&output, 0, 4, 2, ' ', 0)
 	fmt.Fprintf(w, "Snailrace report\t%s\n", report.MeasuredAt.Format(
@@ -47,7 +43,7 @@ func writeVerboseText(writer io.Writer, renderer *Renderer) error {
 	for _, caveat := range renderer.caveats {
 		fmt.Fprintf(w, "Reliability\t%s\n", caveat)
 	}
-	if report.Config.Mode == "tui" {
+	if report.Config.IsTUI() {
 		duration := "until exit"
 		if report.Config.DurationSeconds > 0 {
 			duration = formatDuration(report.Config.DurationSeconds)
@@ -128,11 +124,11 @@ func writeTextBenchmark(
 		formatCount(benchmark.Summary.ValidSampleCount.Mean),
 		formatDuration(benchmark.Summary.SampleCoverageSeconds.Mean),
 	)
-	if !benchmarkSamplesReliable(benchmark, intervalSeconds) {
+	if !model.SamplingReliable(benchmark, intervalSeconds) {
 		fmt.Fprintln(w, "Sampling quality\tLIMITED: fewer than two valid samples or intervals")
 	}
 	fmt.Fprintln(w, "Metric\tMean ± σ\t95% CI mean\tMedian\tP95\tRange")
-	for _, row := range metricRows {
+	for _, row := range metricCatalog {
 		if !availableFor(row, operatingSystem, benchmark.Summary) {
 			fmt.Fprintf(w, "%s\tN/A\tN/A\tN/A\tN/A\tN/A\n", row.name)
 			continue

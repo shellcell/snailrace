@@ -8,8 +8,29 @@ import (
 	"github.com/shellcell/snailrace/internal/model"
 )
 
-type metricRow struct {
+type metricID uint8
+
+const (
+	metricWall metricID = iota
+	metricCPUTotal
+	metricCPUUser
+	metricCPUSystem
+	metricAverageCPU
+	metricMeanResident
+	metricPeakResident
+	metricOSMaxRSS
+	metricPhysicalFootprint
+	metricPeakVirtual
+	metricPeakProcesses
+	metricPeakThreads
+	metricPeakFDs
+	metricCount
+)
+
+type metricDefinition struct {
+	id                metricID
 	name              string
+	chartName         string
 	stats             func(model.Summary) model.Stats
 	format            func(float64) string
 	unavailableDarwin bool
@@ -19,32 +40,32 @@ type metricRow struct {
 	sampled           bool
 }
 
-var metricRows = []metricRow{
-	{"Wall time", func(s model.Summary) model.Stats { return s.WallSeconds }, formatDuration, false, false,
+var metricCatalog = [...]metricDefinition{
+	{metricWall, "Wall time", "Wall time", func(s model.Summary) model.Stats { return s.WallSeconds }, formatDuration, false, false,
 		func(r model.Run) float64 { return r.WallSeconds }, lowerIsBetter, false},
-	{"CPU total", func(s model.Summary) model.Stats { return s.CPUTotalSeconds }, formatDuration, false, false,
+	{metricCPUTotal, "CPU total", "Total CPU", func(s model.Summary) model.Stats { return s.CPUTotalSeconds }, formatDuration, false, false,
 		func(r model.Run) float64 { return r.CPUUserSeconds + r.CPUSystemSeconds }, lowerIsBetter, false},
-	{"CPU user", func(s model.Summary) model.Stats { return s.CPUUserSeconds }, formatDuration, false, false,
+	{metricCPUUser, "CPU user", "User CPU", func(s model.Summary) model.Stats { return s.CPUUserSeconds }, formatDuration, false, false,
 		func(r model.Run) float64 { return r.CPUUserSeconds }, lowerIsBetter, false},
-	{"CPU system", func(s model.Summary) model.Stats { return s.CPUSystemSeconds }, formatDuration, false, false,
+	{metricCPUSystem, "CPU system", "System CPU", func(s model.Summary) model.Stats { return s.CPUSystemSeconds }, formatDuration, false, false,
 		func(r model.Run) float64 { return r.CPUSystemSeconds }, lowerIsBetter, false},
-	{"Average CPU", func(s model.Summary) model.Stats { return s.AverageCPUPercent }, formatPercent, false, false,
+	{metricAverageCPU, "Average CPU", "Average CPU", func(s model.Summary) model.Stats { return s.AverageCPUPercent }, formatPercent, false, false,
 		func(r model.Run) float64 { return r.AverageCPUPercent }, neutralDirection, false},
-	{"Mean resident", func(s model.Summary) model.Stats { return s.MeanResidentBytes }, formatBytes, false, false,
+	{metricMeanResident, "Mean resident", "Mean RSS", func(s model.Summary) model.Stats { return s.MeanResidentBytes }, formatBytes, false, false,
 		func(r model.Run) float64 { return r.MeanResidentBytes }, lowerIsBetter, true},
-	{"Peak resident", func(s model.Summary) model.Stats { return s.PeakResidentBytes }, formatBytes, false, false,
+	{metricPeakResident, "Peak resident", "Peak RSS", func(s model.Summary) model.Stats { return s.PeakResidentBytes }, formatBytes, false, false,
 		func(r model.Run) float64 { return r.PeakResidentBytes }, lowerIsBetter, true},
-	{"OS-reported max RSS", func(s model.Summary) model.Stats { return s.OSMaxRSSBytes }, formatBytes, false, false,
+	{metricOSMaxRSS, "OS-reported max RSS", "OS-reported max RSS", func(s model.Summary) model.Stats { return s.OSMaxRSSBytes }, formatBytes, false, false,
 		func(r model.Run) float64 { return r.OSMaxRSSBytes }, lowerIsBetter, false},
-	{"Peak physical footprint", func(s model.Summary) model.Stats { return s.PhysicalFootprintStats() }, formatBytes, false, true,
+	{metricPhysicalFootprint, "Peak physical footprint", "Peak physical footprint", func(s model.Summary) model.Stats { return s.PhysicalFootprintStats() }, formatBytes, false, true,
 		func(r model.Run) float64 { return r.PeakPhysicalFootprintBytes }, lowerIsBetter, true},
-	{"Peak virtual", func(s model.Summary) model.Stats { return s.PeakVirtualBytes }, formatBytes, false, false,
+	{metricPeakVirtual, "Peak virtual", "Peak virtual memory", func(s model.Summary) model.Stats { return s.PeakVirtualBytes }, formatBytes, false, false,
 		func(r model.Run) float64 { return r.PeakVirtualBytes }, lowerIsBetter, true},
-	{"Peak processes", func(s model.Summary) model.Stats { return s.PeakProcesses }, formatCount, false, false,
+	{metricPeakProcesses, "Peak processes", "Peak processes", func(s model.Summary) model.Stats { return s.PeakProcesses }, formatCount, false, false,
 		func(r model.Run) float64 { return r.PeakProcesses }, neutralDirection, true},
-	{"Peak threads", func(s model.Summary) model.Stats { return s.PeakThreads }, formatCount, false, false,
+	{metricPeakThreads, "Peak threads", "Peak threads", func(s model.Summary) model.Stats { return s.PeakThreads }, formatCount, false, false,
 		func(r model.Run) float64 { return r.PeakThreads }, neutralDirection, true},
-	{"Peak FD references", func(s model.Summary) model.Stats { return s.PeakFileDescriptors }, formatCount, true, false,
+	{metricPeakFDs, "Peak FD references", "Peak FD references", func(s model.Summary) model.Stats { return s.PeakFileDescriptors }, formatCount, true, false,
 		func(r model.Run) float64 { return r.PeakFileDescriptors }, lowerIsBetter, true},
 }
 
@@ -118,13 +139,13 @@ func formatNumber(value float64) string {
 	return result
 }
 
-func available(row metricRow, operatingSystem string) bool {
+func available(row metricDefinition, operatingSystem string) bool {
 	return (operatingSystem != "darwin" || !row.unavailableDarwin) &&
 		(!row.darwinOnly || operatingSystem == "darwin")
 }
 
 func availableFor(
-	row metricRow, operatingSystem string, summaries ...model.Summary,
+	row metricDefinition, operatingSystem string, summaries ...model.Summary,
 ) bool {
 	if !available(row, operatingSystem) {
 		return false

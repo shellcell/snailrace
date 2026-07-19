@@ -13,15 +13,17 @@ func TestDefaultIndexExcludesDiskFootprint(t *testing.T) {
 		indexBenchmark("fast-but-fat", 1, 1, 100, 100, 1_000_000),
 	}
 	// Default index (time, cpu, ram) ranks the fast tool first despite its size.
-	if got, ok := AutomaticBaseline(model.Config{Mode: "command"}, benchmarks); !ok || got != 2 {
-		t.Fatalf("default baseline = %d, want fast tool (2)", got)
+	ranking := Calculate(model.Config{Mode: "command"}, benchmarks)
+	if !ranking.Available || ranking.Rows[0].Benchmark+1 != 2 {
+		t.Fatalf("default baseline = %d, want fast tool (2)", ranking.Rows[0].Benchmark+1)
 	}
 	// Including disk lets the huge footprint sink the fast tool.
 	withDisk := model.Config{
 		Mode: "command", IndexDimensions: []string{"time", "cpu", "ram", "disk"},
 	}
-	if got, ok := AutomaticBaseline(withDisk, benchmarks); !ok || got != 1 {
-		t.Fatalf("disk baseline = %d, want compact tool (1)", got)
+	ranking = Calculate(withDisk, benchmarks)
+	if !ranking.Available || ranking.Rows[0].Benchmark+1 != 1 {
+		t.Fatalf("disk baseline = %d, want compact tool (1)", ranking.Rows[0].Benchmark+1)
 	}
 }
 
@@ -38,9 +40,6 @@ func TestUnavailableRankingUsesExplicitState(t *testing.T) {
 		math.IsInf(ranking.Rows[0].OverallScore, 0) || math.IsNaN(ranking.Rows[0].OverallScore) {
 		t.Fatalf("unavailable row contains invalid ranking values: %+v", ranking.Rows)
 	}
-	if _, ok := AutomaticBaseline(config, benchmarks); ok {
-		t.Fatal("unavailable ranking should not select an automatic baseline")
-	}
 }
 
 func TestFailedBenchmarkIsExcludedFromRanking(t *testing.T) {
@@ -55,8 +54,21 @@ func TestFailedBenchmarkIsExcludedFromRanking(t *testing.T) {
 	if !ranking.Available || len(ranking.Rows) != 1 || ranking.Rows[0].Benchmark != 1 {
 		t.Fatalf("failed tool was not excluded: %+v", ranking)
 	}
-	if baseline, ok := AutomaticBaseline(config, []model.Benchmark{failed, success}); !ok || baseline != 2 {
-		t.Fatalf("baseline = %d/%v, want successful tool 2", baseline, ok)
+	if ranking.Rows[0].Benchmark+1 != 2 {
+		t.Fatalf("baseline = %d, want successful tool 2", ranking.Rows[0].Benchmark+1)
+	}
+}
+
+func TestDimensionDefaultsCannotBeMutatedByCallers(t *testing.T) {
+	dimensions := DefaultIndexDimensions()
+	dimensions[0] = "disk"
+	if got := DefaultIndexDimensions()[0]; got != "time" {
+		t.Fatalf("mutated default dimension = %q", got)
+	}
+	all := IndexDimensions()
+	all[0] = "disk"
+	if got := IndexDimensions()[0]; got != "time" {
+		t.Fatalf("mutated known dimension = %q", got)
 	}
 }
 

@@ -6,7 +6,7 @@ import (
 )
 
 func writeMarkdownComparison(writer io.Writer, renderer *Renderer) {
-	report := renderer.report
+	report := renderer.displayReport
 	baselinePosition := baselineIndex(report)
 	baseline := report.Benchmarks[baselinePosition]
 	fmt.Fprintf(
@@ -34,18 +34,18 @@ func writeMarkdownComparison(writer io.Writer, renderer *Renderer) {
 			formatBytes(float64(baseline.Tool.DiskFootprintBytes)),
 			formatBytes(float64(candidate.Tool.DiskFootprintBytes)), staticDelta,
 		)
-		for metric, row := range metricRows {
+		for _, row := range metricCatalog {
 			if !availableFor(
 				row, report.Host.OS, baseline.Summary, candidate.Summary,
 			) {
 				fmt.Fprintf(writer, "| %s | N/A | N/A | N/A | N/A |\n", row.name)
 				continue
 			}
-			delta := renderer.comparison(index, metric)
+			delta := renderer.comparison(index, row.id)
 			fmt.Fprintf(
 				writer, "| %s | %s | %s | %s | %s |\n", row.name,
 				row.format(delta.baselineMean), row.format(delta.candidateMean),
-				formatDelta(delta, row), formatDeltaInterval(delta, row),
+				formatDelta(delta), formatDeltaInterval(delta, row),
 			)
 		}
 		fmt.Fprintln(writer)

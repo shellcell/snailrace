@@ -34,7 +34,7 @@ func TestRenderedLabelsContainNoTerminalControls(t *testing.T) {
 		}}}
 	for _, format := range []string{"text", "markdown", "html", "svg"} {
 		var output bytes.Buffer
-		if err := Write(&output, format, report); err != nil {
+		if err := NewRenderer(report).Write(&output, format); err != nil {
 			t.Fatalf("%s: %v", format, err)
 		}
 		if strings.ContainsAny(output.String(), "\n\x1b") &&

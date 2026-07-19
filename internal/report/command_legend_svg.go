@@ -14,7 +14,7 @@ func svgCommandLegend(output *strings.Builder, report model.Report, y int) int {
 	for index, benchmark := range report.Benchmarks {
 		fmt.Fprintf(
 			output, `<text x="24" y="%d" class="h3" style="fill:%s">%d. %s</text>`,
-			y, toolColor(report, index), index+1,
+			y, toolColor(index), index+1,
 			html.EscapeString(clip(reportToolLabel(report, index), 80)),
 		)
 		y += 18

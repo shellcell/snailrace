@@ -3,28 +3,27 @@ package report
 import (
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/shellcell/snailrace/internal/model"
 	"github.com/shellcell/snailrace/internal/style"
 )
 
-func Write(writer io.Writer, format string, report model.Report) error {
-	return NewRenderer(report).Write(writer, format)
-}
-
 func (renderer *Renderer) Write(writer io.Writer, format string) error {
-	switch strings.ToLower(format) {
-	case "text", "txt":
-		return writeTextRenderer(writer, renderer)
-	case "json":
-		return writeJSONRenderer(writer, renderer)
-	case "markdown", "md":
+	info, ok := LookupFormat(format)
+	if !ok {
+		return fmt.Errorf("unknown report format %q", format)
+	}
+	switch info.Name {
+	case FormatText:
+		return writeText(writer, renderer)
+	case FormatJSON:
+		return writeJSON(writer, renderer)
+	case FormatMarkdown:
 		return renderer.WriteMarkdownWithCharts(writer, nil, "")
-	case "html":
-		return writeHTMLRenderer(writer, renderer)
-	case "svg":
-		return writeSVGRenderer(writer, renderer)
+	case FormatHTML:
+		return writeHTML(writer, renderer)
+	case FormatSVG:
+		return writeSVG(writer, renderer)
 	default:
 		return fmt.Errorf("unknown report format %q", format)
 	}
@@ -38,13 +37,4 @@ func safeDisplayReport(report model.Report) model.Report {
 		)
 	}
 	return report
-}
-
-func ValidFormat(format string) bool {
-	switch strings.ToLower(format) {
-	case "text", "txt", "json", "markdown", "md", "html", "svg":
-		return true
-	default:
-		return false
-	}
 }

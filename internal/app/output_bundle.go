@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/shellcell/snailrace/internal/model"
 	"github.com/shellcell/snailrace/internal/report"
 )
 
@@ -16,27 +15,23 @@ func saveReportFormats(
 	stderr io.Writer,
 	directory string,
 	formats []string,
-	result model.Report,
-) error {
-	return saveReportFormatsRenderer(
-		stderr, directory, formats, result, report.NewRenderer(result),
-	)
-}
-
-func saveReportFormatsRenderer(
-	stderr io.Writer,
-	directory string,
-	formats []string,
-	result model.Report,
 	renderer *report.Renderer,
 ) error {
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return err
 	}
 	formats = uniqueFormats(formats)
-	needsCharts := containsFormat(formats, "svg") ||
-		containsFormat(formats, "markdown")
-	stem, release, err := reserveReportStem(directory, result)
+	needsCharts := false
+	includeCommandCharts := false
+	for _, format := range formats {
+		info, _ := report.LookupFormat(format)
+		needsCharts = needsCharts || info.NeedsCharts
+		includeCommandCharts = includeCommandCharts || info.Name == report.FormatSVG
+	}
+	metadata := renderer.Metadata()
+	stem, release, err := reserveReportStem(
+		directory, reportStemFor(metadata.MeasuredAt, metadata.ToolNames),
+	)
 	if err != nil {
 		return err
 	}
@@ -53,7 +48,7 @@ func saveReportFormatsRenderer(
 	if needsCharts {
 		chartDirectory := filepath.Join(stagedBundle, "charts")
 		charts, err = renderer.WriteChartFiles(
-			chartDirectory, containsFormat(formats, "svg"),
+			chartDirectory, includeCommandCharts,
 		)
 		if err != nil {
 			return err
@@ -105,9 +100,8 @@ func saveReportFormatsRenderer(
 
 func reserveReportStem(
 	directory string,
-	result model.Report,
+	base string,
 ) (string, func(), error) {
-	base := reportStem(result)
 	for suffix := 1; ; suffix++ {
 		stem := base
 		if suffix > 1 {
@@ -185,12 +179,11 @@ func uniqueFormats(formats []string) []string {
 	seen := make(map[string]bool)
 	result := make([]string, 0, len(formats))
 	for _, format := range formats {
-		format = strings.ToLower(format)
-		switch format {
-		case "txt":
-			format = "text"
-		case "md":
-			format = "markdown"
+		info, ok := report.LookupFormat(format)
+		if !ok {
+			format = strings.ToLower(strings.TrimSpace(format))
+		} else {
+			format = string(info.Name)
 		}
 		if !seen[format] {
 			seen[format] = true
@@ -198,15 +191,6 @@ func uniqueFormats(formats []string) []string {
 		}
 	}
 	return result
-}
-
-func containsFormat(formats []string, target string) bool {
-	for _, format := range formats {
-		if format == target {
-			return true
-		}
-	}
-	return false
 }
 
 func announce(writer io.Writer, path string) error {

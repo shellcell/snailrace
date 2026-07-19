@@ -43,12 +43,11 @@ func staticCostChart(
 			`<text x="%d" y="55" text-anchor="end" class="value">%s</text>`,
 		left, left+plotWidth, format(maximum),
 	)
-	baseline := baselineIndex(report)
 	for index, benchmark := range report.Benchmarks {
 		y := 72 + index*rowHeight
 		value := pick(benchmark)
 		x := left + value/maximum*plotWidth
-		color := chartColor(index, baseline)
+		color := toolColor(index)
 		fmt.Fprintf(
 			&body,
 			`<text x="16" y="%d" class="label" style="fill:%s">%s</text>`+

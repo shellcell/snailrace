@@ -10,12 +10,22 @@ type Spec struct {
 	Name  string
 	Args  []string
 	Shell string
+}
 
+type preparedSpec struct {
+	Spec
 	executable  *os.File
 	shellTarget bool
 }
 
 func (spec Spec) command(ctx context.Context) *exec.Cmd {
+	if spec.Shell != "" {
+		return exec.CommandContext(ctx, "/bin/sh", "-c", spec.Shell)
+	}
+	return exec.CommandContext(ctx, spec.Args[0], spec.Args[1:]...)
+}
+
+func (spec preparedSpec) command(ctx context.Context) *exec.Cmd {
 	path := ""
 	if spec.executable != nil {
 		path = pinnedExecutablePath(spec.executable)
@@ -39,4 +49,8 @@ func (spec Spec) command(ctx context.Context) *exec.Cmd {
 		command.ExtraFiles = pinnedExtraFiles(spec.executable)
 	}
 	return command
+}
+
+type commandSpec interface {
+	command(context.Context) *exec.Cmd
 }

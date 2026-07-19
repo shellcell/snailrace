@@ -49,7 +49,7 @@ func Calculate(config model.Config, benchmarks []model.Benchmark) Ranking {
 		result.UnavailableReason = "no benchmarks"
 		return result
 	}
-	result.FixedTUI = config.Mode == "tui" && config.DurationSeconds > 0
+	result.FixedTUI = config.FixedDurationTUI()
 	eligible := make([]bool, count)
 	eligibleCount := 0
 	primary, cpu := make([]float64, count), make([]float64, count)
@@ -142,23 +142,20 @@ func Calculate(config model.Config, benchmarks []model.Benchmark) Ranking {
 	return result
 }
 
-func AutomaticBaseline(config model.Config, benchmarks []model.Benchmark) (int, bool) {
-	ranking := Calculate(config, benchmarks)
-	if !ranking.Available || len(ranking.Rows) == 0 {
-		return 0, false
-	}
-	return ranking.Rows[0].Benchmark + 1, true
+var indexDimensions = [...]string{"time", "cpu", "ram", "disk"}
+var defaultIndexDimensions = [...]string{"time", "cpu", "ram"}
+
+func IndexDimensions() []string {
+	return append([]string(nil), indexDimensions[:]...)
 }
 
-// IndexDimensions are the cost categories that may compose the balanced index.
-var IndexDimensions = []string{"time", "cpu", "ram", "disk"}
-
-// DefaultIndexDimensions is the balanced index used when none is configured.
-var DefaultIndexDimensions = []string{"time", "cpu", "ram"}
+func DefaultIndexDimensions() []string {
+	return append([]string(nil), defaultIndexDimensions[:]...)
+}
 
 // ValidIndexDimension reports whether token names a known index dimension.
 func ValidIndexDimension(token string) bool {
-	for _, dimension := range IndexDimensions {
+	for _, dimension := range indexDimensions {
 		if token == dimension {
 			return true
 		}
@@ -168,7 +165,7 @@ func ValidIndexDimension(token string) bool {
 
 func indexSet(dimensions []string) map[string]bool {
 	if len(dimensions) == 0 {
-		dimensions = DefaultIndexDimensions
+		dimensions = defaultIndexDimensions[:]
 	}
 	set := make(map[string]bool, len(dimensions))
 	for _, dimension := range dimensions {

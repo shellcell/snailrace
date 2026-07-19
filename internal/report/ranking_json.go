@@ -49,12 +49,8 @@ type jsonRanking struct {
 	Rows               []jsonRankingRow `json:"rows"`
 }
 
-func writeJSON(writer io.Writer, report model.Report) error {
-	return writeJSONRenderer(writer, NewRenderer(report))
-}
-
-func writeJSONRenderer(writer io.Writer, renderer *Renderer) error {
-	report := renderer.raw
+func writeJSON(writer io.Writer, renderer *Renderer) error {
+	report := renderer.rawReport
 	payload := struct {
 		model.Report
 		Ranking     jsonRanking   `json:"ranking"`
@@ -84,7 +80,7 @@ func makeJSONFailures(report model.Report) []jsonFailure {
 
 func makeJSONRanking(report model.Report, ranking rankingData) jsonRanking {
 	result := jsonRanking{
-		Available: ranking.available, UnavailableReason: ranking.unavailableReason,
+		Available: ranking.Available, UnavailableReason: ranking.UnavailableReason,
 		Method: "equal-weight geometric mean of normalized category costs; included: " +
 			balancedIndexCategories(ranking),
 		PrimaryMetric:      ranking.primaryLabel,
@@ -96,32 +92,32 @@ func makeJSONRanking(report model.Report, ranking rankingData) jsonRanking {
 			Value: winner.value,
 		})
 	}
-	for _, row := range ranking.rows {
+	for _, row := range ranking.Rows {
 		item := jsonRankingRow{
-			Tool:         report.Benchmarks[row.benchmark].Tool.Name,
-			PrimaryValue: row.primaryValue, PrimaryRank: row.primaryRank,
-			CPUValue: row.cpuValue, CPURank: row.cpuRank,
-			FootprintBytes: row.footprintValue, FootprintRank: row.footprintRank,
+			Tool:         report.Benchmarks[row.Benchmark].Tool.Name,
+			PrimaryValue: row.PrimaryValue, PrimaryRank: row.PrimaryRank,
+			CPUValue: row.CPUValue, CPURank: row.CPURank,
+			FootprintBytes: row.FootprintValue, FootprintRank: row.FootprintRank,
 		}
-		if ranking.available {
-			item.Rank = row.overallRank
-			item.BalancedIndex = floatPointer(row.overallScore)
+		if ranking.Available {
+			item.Rank = row.OverallRank
+			item.BalancedIndex = floatPointer(row.OverallScore)
 			item.BalancedDeltaPercent = floatPointer(
-				(row.overallScore/ranking.bestOverall - 1) * 100,
+				(row.OverallScore/ranking.BestOverall - 1) * 100,
 			)
 		}
-		if ranking.primaryRatio {
-			item.PrimaryDeltaPercent = floatPointer((row.primaryScore - 1) * 100)
+		if ranking.PrimaryRatio {
+			item.PrimaryDeltaPercent = floatPointer((row.PrimaryScore - 1) * 100)
 		}
-		if ranking.cpuRatio {
-			item.CPUDeltaPercent = floatPointer((row.cpuScore - 1) * 100)
+		if ranking.CPURatio {
+			item.CPUDeltaPercent = floatPointer((row.CPUScore - 1) * 100)
 		}
-		if ranking.footprintRatio {
-			item.FootprintDeltaPercent = floatPointer((row.footprintScore - 1) * 100)
+		if ranking.FootprintRatio {
+			item.FootprintDeltaPercent = floatPointer((row.FootprintScore - 1) * 100)
 		}
-		if ranking.ramAvailable {
-			item.RAMValueBytes, item.RAMRank = row.ramValue, row.ramRank
-			item.RAMDeltaPercent = floatPointer((row.ramScore - 1) * 100)
+		if ranking.RAMAvailable {
+			item.RAMValueBytes, item.RAMRank = row.RAMValue, row.RAMRank
+			item.RAMDeltaPercent = floatPointer((row.RAMScore - 1) * 100)
 		}
 		result.Rows = append(result.Rows, item)
 	}

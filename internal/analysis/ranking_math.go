@@ -75,11 +75,8 @@ func samplesReliable(config model.Config, benchmarks []model.Benchmark, eligible
 		if !eligible[index] {
 			continue
 		}
-		for _, run := range benchmark.Runs {
-			if run.WallSeconds < minimum || run.SampleCount < 2 ||
-				run.SampleCoverageSeconds < config.IntervalMS/1000 {
-				return false
-			}
+		if !model.SamplingReliable(benchmark, config.IntervalMS/1000) {
+			return false
 		}
 	}
 	return true

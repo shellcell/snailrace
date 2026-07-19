@@ -1,22 +1,8 @@
 package report
 
-type rankingRow struct {
-	benchmark      int
-	overallRank    int
-	primaryRank    int
-	cpuRank        int
-	ramRank        int
-	footprintRank  int
-	overallScore   float64
-	primaryScore   float64
-	cpuScore       float64
-	ramScore       float64
-	footprintScore float64
-	primaryValue   float64
-	cpuValue       float64
-	ramValue       float64
-	footprintValue float64
-}
+import "github.com/shellcell/snailrace/internal/analysis"
+
+type rankingRow = analysis.RankingRow
 
 type categoryWinner struct {
 	category   string
@@ -25,21 +11,9 @@ type categoryWinner struct {
 }
 
 type rankingData struct {
-	rows              []rankingRow
-	winners           []categoryWinner
-	available         bool
-	unavailableReason string
-	primaryLabel      string
-	primaryUnit       func(float64) string
-	ramAvailable      bool
-	ramPresent        bool
-	samplingInterval  string
-	primaryRatio      bool
-	cpuRatio          bool
-	footprintRatio    bool
-	indexPrimary      bool
-	indexCPU          bool
-	indexRAM          bool
-	indexFootprint    bool
-	bestOverall       float64
+	analysis.Ranking
+	winners          []categoryWinner
+	primaryLabel     string
+	primaryUnit      func(float64) string
+	samplingInterval string
 }

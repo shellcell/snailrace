@@ -10,7 +10,7 @@ import (
 func htmlToolLabel(report model.Report, index int, badge bool) string {
 	label := fmt.Sprintf(
 		`<span style="color:%s">%s</span>`,
-		toolColor(report, index),
+		toolColor(index),
 		html.EscapeString(report.Benchmarks[index].Tool.Name),
 	)
 	if badge && index == baselineIndex(report) {

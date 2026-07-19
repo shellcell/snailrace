@@ -42,35 +42,65 @@ func TestRunOnceRecordsNonZeroExit(t *testing.T) {
 }
 
 func TestMeanResidentUsesObservedTimeWeights(t *testing.T) {
-	metrics := platform.Metrics{
-		ResidentByteSeconds: 300, SampleCoverageSeconds: 2,
-		ResidentByteSamples: 999, SampleCount: 3,
-	}
-	if got := sampledMeanResident(metrics); got != 150 {
+	var samples sampleAggregate
+	started := time.Unix(0, 0)
+	samples.observe(platform.Metrics{ResidentBytes: 100}, started)
+	samples.observe(platform.Metrics{ResidentBytes: 200}, started.Add(time.Second))
+	samples.addCoverage(started.Add(2 * time.Second))
+	if got := samples.meanResident(); got != 150 {
 		t.Fatalf("weighted mean RSS = %g, want 150", got)
 	}
 }
 
 func TestUpdatePeaksTracksPhysicalFootprint(t *testing.T) {
-	peak := platform.Metrics{PhysicalFootprintBytes: 100, PhysicalFootprintValid: true}
-	updatePeaks(&peak, platform.Metrics{
+	var samples sampleAggregate
+	samples.observe(platform.Metrics{
+		PhysicalFootprintBytes: 100, PhysicalFootprintValid: true,
+	}, time.Unix(0, 0))
+	samples.observe(platform.Metrics{
 		PhysicalFootprintBytes: 250, PhysicalFootprintValid: true,
-	})
-	updatePeaks(&peak, platform.Metrics{
+	}, time.Unix(1, 0))
+	samples.observe(platform.Metrics{
 		PhysicalFootprintBytes: 200, PhysicalFootprintValid: true,
-	})
-	if peak.PhysicalFootprintBytes != 250 {
-		t.Fatalf("peak physical footprint = %d, want 250", peak.PhysicalFootprintBytes)
+	}, time.Unix(2, 0))
+	if samples.peak.PhysicalFootprintBytes != 250 {
+		t.Fatalf("peak physical footprint = %d, want 250", samples.peak.PhysicalFootprintBytes)
 	}
 }
 
 func TestUpdatePeaksInvalidatesPartialPhysicalFootprint(t *testing.T) {
-	var peak platform.Metrics
-	updatePeaks(&peak, platform.Metrics{
+	var samples sampleAggregate
+	samples.observe(platform.Metrics{
 		PhysicalFootprintBytes: 100, PhysicalFootprintValid: true,
-	})
-	updatePeaks(&peak, platform.Metrics{PhysicalFootprintBytes: 200})
-	if peak.PhysicalFootprintValid {
+	}, time.Unix(0, 0))
+	samples.observe(
+		platform.Metrics{PhysicalFootprintBytes: 200}, time.Unix(1, 0),
+	)
+	if samples.peak.PhysicalFootprintValid {
 		t.Fatal("a run with an invalid physical-footprint sample should be unavailable")
+	}
+}
+
+func TestMonitorUsesInjectedSampler(t *testing.T) {
+	monitor := startMonitor(42, time.Hour, func(pid int) (platform.Metrics, bool) {
+		if pid != 42 {
+			t.Fatalf("sampled PID = %d, want 42", pid)
+		}
+		return platform.Metrics{ResidentBytes: 123, Processes: 1}, true
+	})
+	samples := monitor.finish()
+	if samples.sampleCount != 1 || samples.peak.ResidentBytes != 123 {
+		t.Fatalf("samples = %+v", samples)
+	}
+}
+
+func TestMonitorPreservesInvalidPhysicalFootprintSample(t *testing.T) {
+	monitor := startMonitor(42, time.Hour, func(int) (platform.Metrics, bool) {
+		return platform.Metrics{PhysicalFootprintInvalid: true}, false
+	})
+	samples := monitor.finish()
+	if samples.sampleCount != 0 || !samples.peak.PhysicalFootprintInvalid ||
+		samples.peak.PhysicalFootprintValid {
+		t.Fatalf("invalid sample = %+v", samples)
 	}
 }

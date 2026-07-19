@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/shellcell/snailrace/internal/model"
+	reportpkg "github.com/shellcell/snailrace/internal/report"
 )
 
 func TestSavingAlsoWritesCompleteReportToStdout(t *testing.T) {
@@ -106,7 +107,7 @@ func TestMarkdownAndSVGSavedAsChartBundle(t *testing.T) {
 			{Tool: model.ToolInfo{Name: "second"}, Runs: runs, Summary: model.Summarize(runs)},
 		},
 	}
-	if err := saveReportFormats(
+	if err := saveReportFormatsForTest(
 		&stderr, directory, []string{"markdown", "svg"}, result,
 	); err != nil {
 		t.Fatal(err)
@@ -197,7 +198,7 @@ func TestSavingSameReportUsesUniqueNames(t *testing.T) {
 		wait.Add(1)
 		go func() {
 			defer wait.Done()
-			errors <- saveReportFormats(io.Discard, directory, []string{"html"}, result)
+			errors <- saveReportFormatsForTest(io.Discard, directory, []string{"html"}, result)
 		}()
 	}
 	wait.Wait()
@@ -222,10 +223,10 @@ func TestSavingDifferentFormatsDoesNotReuseExistingStem(t *testing.T) {
 		Config:     model.Config{Mode: "command", Baseline: 1},
 		Benchmarks: []model.Benchmark{{Tool: model.ToolInfo{Name: "same"}}},
 	}
-	if err := saveReportFormats(io.Discard, directory, []string{"html"}, result); err != nil {
+	if err := saveReportFormatsForTest(io.Discard, directory, []string{"html"}, result); err != nil {
 		t.Fatal(err)
 	}
-	if err := saveReportFormats(io.Discard, directory, []string{"markdown"}, result); err != nil {
+	if err := saveReportFormatsForTest(io.Discard, directory, []string{"markdown"}, result); err != nil {
 		t.Fatal(err)
 	}
 	entries, err := os.ReadDir(directory)
@@ -243,7 +244,7 @@ func TestFailedSavePublishesNoPartialReports(t *testing.T) {
 		Config:     model.Config{Mode: "command", Baseline: 1},
 		Benchmarks: []model.Benchmark{{Tool: model.ToolInfo{Name: "tool"}}},
 	}
-	if err := saveReportFormats(
+	if err := saveReportFormatsForTest(
 		io.Discard, directory, []string{"html", "unknown"}, result,
 	); err == nil {
 		t.Fatal("invalid staged format should fail")
@@ -289,7 +290,7 @@ func TestSavedSVGBundleIncludesCommandFailures(t *testing.T) {
 			Runs: []model.Run{failedRun}, Summary: model.Summarize([]model.Run{failedRun}),
 		}},
 	}
-	if err := saveReportFormats(io.Discard, directory, []string{"svg"}, result); err != nil {
+	if err := saveReportFormatsForTest(io.Discard, directory, []string{"svg"}, result); err != nil {
 		t.Fatal(err)
 	}
 	entries, err := os.ReadDir(directory)
@@ -316,4 +317,12 @@ func TestFormatAliasesAreCanonicalizedBeforeSaving(t *testing.T) {
 	if len(formats) != 2 || formats[0] != "text" || formats[1] != "markdown" {
 		t.Fatalf("canonical formats = %v", formats)
 	}
+}
+
+func saveReportFormatsForTest(
+	stderr io.Writer, directory string, formats []string, result model.Report,
+) error {
+	return saveReportFormats(
+		stderr, directory, formats, reportpkg.NewRenderer(result),
+	)
 }

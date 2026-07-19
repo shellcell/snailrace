@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/shellcell/snailrace/internal/model"
 )
 
 type ChartArtifact struct {
@@ -15,18 +13,10 @@ type ChartArtifact struct {
 	Filename   string
 }
 
-func WriteChartFiles(
-	directory string,
-	report model.Report,
-	includeCommands bool,
-) ([]ChartArtifact, error) {
-	return NewRenderer(report).WriteChartFiles(directory, includeCommands)
-}
-
 func (renderer *Renderer) WriteChartFiles(
 	directory string, includeCommands bool,
 ) ([]ChartArtifact, error) {
-	report := renderer.report
+	report := renderer.displayReport
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return nil, err
 	}

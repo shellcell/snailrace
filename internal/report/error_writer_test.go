@@ -33,7 +33,7 @@ func TestReportFormatsPropagateWriterErrors(t *testing.T) {
 	}
 	for _, format := range []string{"text", "html", "markdown", "svg", "json"} {
 		t.Run(format, func(t *testing.T) {
-			err := Write(&limitedWriter{}, format, report)
+			err := NewRenderer(report).Write(&limitedWriter{}, format)
 			if !errors.Is(err, errWriteLimit) {
 				t.Fatalf("error = %v, want write failure", err)
 			}

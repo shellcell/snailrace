@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"os/exec"
 	"syscall"
 	"time"
 
@@ -18,7 +17,7 @@ import (
 
 func runTUIOnce(
 	ctx context.Context,
-	spec Spec,
+	spec commandSpec,
 	interval time.Duration,
 	options Options,
 ) (model.Run, error) {
@@ -80,18 +79,16 @@ func runTUIOnce(
 		go copyTerminalOutput(io.Discard, terminal, outputDone)
 	}
 
-	stopMonitor := make(chan struct{})
-	monitorDone := make(chan platform.Metrics, 1)
-	go monitor(cmd.Process.Pid, interval, stopMonitor, monitorDone)
+	groupID := cmd.Process.Pid
+	monitor := startMonitor(groupID, interval, platform.SampleProcessGroup)
 	waitDone := make(chan error, 1)
 	go func() { waitDone <- cmd.Wait() }()
 
 	waitResult := waitForTUI(
-		ctx, cmd, options.Duration, started, waitDone,
+		ctx, groupID, options.Duration, started, waitDone,
 	)
-	signalProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
-	close(stopMonitor)
-	peak := <-monitorDone
+	signalProcessGroup(groupID, syscall.SIGKILL)
+	samples := monitor.finish()
 	stopInput()
 	if inputDone != nil {
 		<-inputDone
@@ -107,8 +104,6 @@ func runTUIOnce(
 		<-outputDone
 	}
 	user, system, rusageRSS := platform.ResourceUsage(cmd.ProcessState)
-	peak.Processes = max(peak.Processes, 1)
-	peak.Threads = max(peak.Threads, 1)
 	if ctx.Err() != nil {
 		return model.Run{}, ctx.Err()
 	}
@@ -119,8 +114,9 @@ func runTUIOnce(
 		!isNonZeroExit(cmd, waitResult.err) {
 		return model.Run{}, waitResult.err
 	}
-	return makeTUIRun(
-		cmd, waitResult.elapsed, user, system, rusageRSS, peak, waitResult.reason,
+	return makeRun(
+		cmd.ProcessState, waitResult.elapsed, user, system, rusageRSS,
+		samples, waitResult.reason,
 	), nil
 }
 
@@ -132,7 +128,7 @@ type tuiWaitResult struct {
 
 func waitForTUI(
 	ctx context.Context,
-	cmd *exec.Cmd,
+	groupID int,
 	duration time.Duration,
 	started time.Time,
 	waitDone <-chan error,
@@ -142,7 +138,7 @@ func waitForTUI(
 		case err := <-waitDone:
 			return tuiWaitResult{err: err, elapsed: time.Since(started), reason: "exited"}
 		case <-ctx.Done():
-			signalProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
+			signalProcessGroup(groupID, syscall.SIGKILL)
 			return tuiWaitResult{
 				err: <-waitDone, elapsed: time.Since(started), reason: "interrupted",
 			}
@@ -158,13 +154,13 @@ func waitForTUI(
 	case err := <-waitDone:
 		return tuiWaitResult{err: err, elapsed: time.Since(started), reason: "exited"}
 	case <-ctx.Done():
-		signalProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
+		signalProcessGroup(groupID, syscall.SIGKILL)
 		return tuiWaitResult{
 			err: <-waitDone, elapsed: time.Since(started), reason: "interrupted",
 		}
 	case <-timer.C:
 		elapsed := time.Since(started)
-		signalProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
+		signalProcessGroup(groupID, syscall.SIGKILL)
 		return tuiWaitResult{err: <-waitDone, elapsed: elapsed, reason: "duration"}
 	}
 }

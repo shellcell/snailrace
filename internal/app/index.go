@@ -13,7 +13,7 @@ type indexValues struct {
 }
 
 func newIndexValues() indexValues {
-	return indexValues{values: append([]string(nil), analysis.DefaultIndexDimensions...)}
+	return indexValues{values: analysis.DefaultIndexDimensions()}
 }
 
 func (index *indexValues) String() string {
@@ -33,7 +33,7 @@ func (index *indexValues) Set(value string) error {
 		if !analysis.ValidIndexDimension(item) {
 			return fmt.Errorf(
 				"unknown index dimension %q; choose from %s",
-				item, strings.Join(analysis.IndexDimensions, ", "),
+				item, strings.Join(analysis.IndexDimensions(), ", "),
 			)
 		}
 		if !contains(index.values, item) {

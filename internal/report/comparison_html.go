@@ -9,7 +9,7 @@ import (
 )
 
 func writeHTMLComparison(writer io.Writer, renderer *Renderer) {
-	report := renderer.report
+	report := renderer.displayReport
 	baselinePosition := baselineIndex(report)
 	baseline := report.Benchmarks[baselinePosition]
 	fmt.Fprintf(
@@ -36,10 +36,10 @@ func writeHTMLComparison(writer io.Writer, renderer *Renderer) {
 			`<thead><tr><th>Metric</th><th>Baseline mean</th>`+
 			`<th>Candidate mean</th><th>Δ mean</th></tr></thead><tbody>`)
 		writeHTMLStaticFootprint(writer, baseline, candidate)
-		for metric, row := range metricRows {
+		for _, row := range metricCatalog {
 			writeHTMLComparisonRow(
 				writer, report.Host.OS, baseline, candidate, row,
-				renderer.comparison(index, metric),
+				renderer.comparison(index, row.id),
 			)
 		}
 		fmt.Fprint(writer, "</tbody></table></div>")
@@ -74,7 +74,7 @@ func writeHTMLComparisonRow(
 	writer io.Writer,
 	operatingSystem string,
 	baseline, candidate model.Benchmark,
-	row metricRow,
+	row metricDefinition,
 	delta deltaResult,
 ) {
 	if !availableFor(row, operatingSystem, baseline.Summary, candidate.Summary) {
@@ -88,7 +88,7 @@ func writeHTMLComparisonRow(
 			`<span class="delta muted">%s</span></td></tr>`,
 		row.name, row.format(delta.baselineMean), delta.class,
 		row.format(delta.candidateMean), delta.class,
-		html.EscapeString(formatDelta(delta, row)),
+		html.EscapeString(formatDelta(delta)),
 		html.EscapeString(formatDeltaInterval(delta, row)),
 	)
 }

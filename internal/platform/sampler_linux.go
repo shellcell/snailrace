@@ -7,17 +7,14 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
-	"time"
+	"unsafe"
 
 	"golang.org/x/sys/unix"
 )
 
-func DefaultInterval() time.Duration { return 10 * time.Millisecond }
-
-func SampleImmediately() bool { return true }
-
-func SampleTree(rootPID int) (Metrics, bool) {
+func SampleProcessGroup(rootPID int) (Metrics, bool) {
 	directory, err := unix.Open("/proc", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return Metrics{}, false
@@ -27,7 +24,6 @@ func SampleTree(rootPID int) (Metrics, bool) {
 	rootFound := false
 	statBuffer := make([]byte, 4096)
 	directoryBuffer := make([]byte, 32*1024)
-	names := make([]string, 0, 256)
 	for {
 		count, readErr := unix.ReadDirent(directory, directoryBuffer)
 		if readErr != nil {
@@ -36,17 +32,12 @@ func SampleTree(rootPID int) (Metrics, bool) {
 		if count == 0 {
 			return total, rootFound
 		}
-		_, _, names = unix.ParseDirent(directoryBuffer[:count], -1, names[:0])
-		for _, name := range names {
-			pid, ok := parsePID(name)
-			if !ok {
-				continue
-			}
+		validDirents := scanProcDirents(directoryBuffer[:count], func(pid int) {
 			record, err := readProcessAt(
-				directory, name, pid, rootPID, statBuffer,
+				directory, pid, rootPID, statBuffer,
 			)
 			if err != nil || record.GroupID != rootPID {
-				continue
+				return
 			}
 			if record.PID == rootPID {
 				rootFound = true
@@ -56,57 +47,78 @@ func SampleTree(rootPID int) (Metrics, bool) {
 			total.Processes++
 			total.Threads += record.Threads
 			total.FileDescriptors += record.FileDescriptors
+		})
+		if !validDirents {
+			return Metrics{}, false
 		}
 	}
 }
 
-func readProcess(pid int) (Process, error) {
+func readProcess(pid int) (process, error) {
 	base := filepath.Join("/proc", strconv.Itoa(pid))
 	data, err := os.ReadFile(filepath.Join(base, "stat"))
 	if err != nil {
-		return Process{}, err
+		return process{}, err
 	}
-	process, err := parseProcessStat(data, pid)
+	record, err := parseProcessStat(data, pid)
 	if err != nil {
-		return Process{}, err
+		return process{}, err
 	}
-	process.FileDescriptors = countDirectory(filepath.Join(base, "fd"))
-	return process, nil
+	record.FileDescriptors = countDirectory(filepath.Join(base, "fd"))
+	return record, nil
 }
 
 func readProcessAt(
-	procFD int, name string, pid, groupID int, buffer []byte,
-) (Process, error) {
-	file, err := unix.Openat(procFD, name+"/stat", unix.O_RDONLY|unix.O_CLOEXEC, 0)
+	procFD, pid, groupID int, buffer []byte,
+) (process, error) {
+	file, err := openProcessStat(procFD, pid)
 	if err != nil {
-		return Process{}, err
+		return process{}, err
 	}
 	count, readErr := unix.Read(file, buffer)
 	_ = unix.Close(file)
 	if readErr != nil {
-		return Process{}, readErr
+		return process{}, readErr
 	}
 	if count == len(buffer) {
-		return Process{}, errors.New("process stat exceeds buffer")
+		return process{}, errors.New("process stat exceeds buffer")
 	}
-	process, err := parseProcessStat(buffer[:count], pid)
+	record, err := parseProcessStat(buffer[:count], pid)
 	if err != nil {
-		return Process{}, err
+		return process{}, err
 	}
-	if process.GroupID == groupID {
-		process.FileDescriptors = countDirectory("/proc/" + name + "/fd")
+	if record.GroupID == groupID {
+		record.FileDescriptors = countDirectory(
+			"/proc/" + strconv.Itoa(pid) + "/fd",
+		)
 	}
-	return process, nil
+	return record, nil
 }
 
-func parseProcessStat(data []byte, pid int) (Process, error) {
+func openProcessStat(procFD, pid int) (int, error) {
+	var storage [32]byte
+	path := strconv.AppendInt(storage[:0], int64(pid), 10)
+	path = append(path, '/', 's', 't', 'a', 't', 0)
+	file, _, errno := unix.Syscall6(
+		unix.SYS_OPENAT,
+		uintptr(procFD), uintptr(unsafe.Pointer(&path[0])),
+		uintptr(unix.O_RDONLY|unix.O_CLOEXEC), 0, 0, 0,
+	)
+	runtime.KeepAlive(path)
+	if errno != 0 {
+		return -1, errno
+	}
+	return int(file), nil
+}
+
+func parseProcessStat(data []byte, pid int) (process, error) {
 	closeParen := bytes.LastIndexByte(data, ')')
 	if closeParen < 0 || closeParen+2 >= len(data) {
-		return Process{}, errors.New("malformed process stat")
+		return process{}, errors.New("malformed process stat")
 	}
 	fields := data[closeParen+2:]
-	var process Process
-	process.PID = pid
+	var result process
+	result.PID = pid
 	field := 0
 	for offset := 0; offset < len(fields); {
 		for offset < len(fields) && (fields[offset] == ' ' || fields[offset] == '\n') {
@@ -123,13 +135,13 @@ func parseProcessStat(data []byte, pid int) (Process, error) {
 		var err error
 		switch field {
 		case 1:
-			process.PPID, err = parsePositiveInt(value)
+			result.PPID, err = parsePositiveInt(value)
 		case 2:
-			process.GroupID, err = parsePositiveInt(value)
+			result.GroupID, err = parsePositiveInt(value)
 		case 17:
-			process.Threads, err = parseUint(value)
+			result.Threads, err = parseUint(value)
 		case 20:
-			process.VirtualBytes, err = parseUint(value)
+			result.VirtualBytes, err = parseUint(value)
 		case 21:
 			var pages int64
 			pages, err = parseInt64(value)
@@ -138,28 +150,53 @@ func parseProcessStat(data []byte, pid int) (Process, error) {
 				if uint64(pages) > math.MaxUint64/pageSize {
 					err = errors.New("resident size overflows")
 				} else {
-					process.ResidentBytes = uint64(pages) * pageSize
+					result.ResidentBytes = uint64(pages) * pageSize
 				}
 			}
 		}
 		if err != nil {
-			return Process{}, err
+			return process{}, err
 		}
 		field++
 		if field > 21 {
-			return process, nil
+			return result, nil
 		}
 	}
-	return Process{}, errors.New("short process stat")
+	return process{}, errors.New("short process stat")
 }
 
-func parsePID(value string) (int, bool) {
-	if value == "" {
+func scanProcDirents(data []byte, visit func(int)) bool {
+	// linux_dirent64 stores d_reclen at byte 16 and d_name at byte 19.
+	const recordHeader = 19
+	for offset := 0; offset < len(data); {
+		if len(data)-offset < recordHeader {
+			return false
+		}
+		recordLength := int(data[offset+16]) | int(data[offset+17])<<8
+		if recordLength < recordHeader || recordLength%8 != 0 ||
+			recordLength > len(data)-offset {
+			return false
+		}
+		name := data[offset+recordHeader : offset+recordLength]
+		nameLength := bytes.IndexByte(name, 0)
+		if nameLength < 0 {
+			return false
+		}
+		if pid, ok := parsePIDBytes(name[:nameLength]); ok {
+			visit(pid)
+		}
+		offset += recordLength
+	}
+	return true
+}
+
+func parsePIDBytes(value []byte) (int, bool) {
+	if len(value) == 0 {
 		return 0, false
 	}
 	result := 0
-	for index := range len(value) {
-		digit := value[index] - '0'
+	for _, character := range value {
+		digit := character - '0'
 		if digit > 9 || result > (math.MaxInt-int(digit))/10 {
 			return 0, false
 		}

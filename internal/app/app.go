@@ -217,8 +217,8 @@ func writeResult(
 	renderer := report.NewRenderer(result)
 	var saveErr error
 	if directory != "" {
-		saveErr = saveReportFormatsRenderer(
-			stderr, directory, formats, result, renderer,
+		saveErr = saveReportFormats(
+			stderr, directory, formats, renderer,
 		)
 	}
 	textErr := renderer.Write(stdout, "text")

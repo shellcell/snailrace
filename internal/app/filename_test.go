@@ -15,7 +15,7 @@ func TestReportPathContainsToolAndMeasurementTime(t *testing.T) {
 			Tool: model.ToolInfo{Name: "My Tool!"},
 		}},
 	}
-	got := reportPath("reports", "markdown", report)
+	got := reportPathWithStem("reports", "markdown", reportStem(report))
 	want := filepath.Join("reports", "snail-my-tool-20260711-140509.md")
 	if got != want {
 		t.Fatalf("path = %q, want %q", got, want)
@@ -31,7 +31,7 @@ func TestComparisonReportPathNamesMeasuredTools(t *testing.T) {
 			{Tool: model.ToolInfo{Name: "awk"}},
 		},
 	}
-	got := filepath.Base(reportPath(".", "json", report))
+	got := filepath.Base(reportPathWithStem(".", "json", reportStem(report)))
 	want := "snail-grep-vs-ripgrep-and-1-20260711-140509.json"
 	if got != want {
 		t.Fatalf("name = %q, want %q", got, want)

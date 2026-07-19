@@ -31,7 +31,7 @@ func TestJSONIncludesComputedRanking(t *testing.T) {
 		},
 	}
 	var output bytes.Buffer
-	if err := writeJSON(&output, report); err != nil {
+	if err := writeJSON(&output, NewRenderer(report)); err != nil {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{"\"ranking\"", "\"winners\"", "balanced_index"} {
@@ -50,7 +50,7 @@ func TestUnavailableRankingSerializesWithoutNonFiniteValues(t *testing.T) {
 		Benchmarks: []model.Benchmark{benchmarkWithWallTimes("short", 0.001)},
 	}
 	var output bytes.Buffer
-	if err := writeJSON(&output, report); err != nil {
+	if err := writeJSON(&output, NewRenderer(report)); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(output.String(), `"available": false`) ||
@@ -72,7 +72,7 @@ func TestFailedCommandsAreProminentInEveryFormat(t *testing.T) {
 	for _, format := range []string{"text", "html", "markdown", "svg", "json"} {
 		t.Run(format, func(t *testing.T) {
 			var output bytes.Buffer
-			if err := Write(&output, format, report); err != nil {
+			if err := NewRenderer(report).Write(&output, format); err != nil {
 				t.Fatal(err)
 			}
 			value := strings.ToLower(output.String())
@@ -92,7 +92,7 @@ func TestHTMLPreservesLongCommandInWrappingBlock(t *testing.T) {
 		}},
 	}
 	var output bytes.Buffer
-	if err := writeHTML(&output, report); err != nil {
+	if err := writeHTML(&output, NewRenderer(report)); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(output.String(), command) ||

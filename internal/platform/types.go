@@ -1,5 +1,9 @@
 package platform
 
+import "time"
+
+func DefaultInterval() time.Duration { return 10 * time.Millisecond }
+
 type Metrics struct {
 	ResidentBytes            uint64
 	PhysicalFootprintBytes   uint64
@@ -9,13 +13,9 @@ type Metrics struct {
 	Processes                uint64
 	Threads                  uint64
 	FileDescriptors          uint64
-	ResidentByteSamples      uint64
-	SampleCount              uint64
-	ResidentByteSeconds      float64
-	SampleCoverageSeconds    float64
 }
 
-type Process struct {
+type process struct {
 	PID, PPID, GroupID          int
 	ResidentBytes, VirtualBytes uint64
 	Threads, FileDescriptors    uint64

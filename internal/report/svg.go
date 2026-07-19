@@ -5,8 +5,6 @@ import (
 	"html"
 	"io"
 	"strings"
-
-	"github.com/shellcell/snailrace/internal/model"
 )
 
 const svgReportWidth = 1500
@@ -21,12 +19,8 @@ const svgReportStyle = `<style>` +
 	`.neutral{fill:#81a1c1}.rule{stroke:#4c566a}.panel{fill:#3b4252}` +
 	`</style>`
 
-func writeSVG(writer io.Writer, report model.Report) error {
-	return writeSVGRenderer(writer, NewRenderer(report))
-}
-
-func writeSVGRenderer(writer io.Writer, renderer *Renderer) error {
-	report := renderer.report
+func writeSVG(writer io.Writer, renderer *Renderer) error {
+	report := renderer.displayReport
 	checked := newErrorWriter(writer)
 	writer = checked
 	var content strings.Builder
@@ -51,11 +45,11 @@ func writeSVGRenderer(writer io.Writer, renderer *Renderer) error {
 }
 
 func svgHeader(output *strings.Builder, renderer *Renderer) int {
-	report := renderer.report
+	report := renderer.displayReport
 	caveats := renderer.caveats
 	panelHeight := 96 + len(caveats)*22
 	nextSection := 254 + len(caveats)*22
-	if report.Config.Mode == "tui" {
+	if report.Config.IsTUI() {
 		panelHeight += 24
 		nextSection += 24
 	}
@@ -96,7 +90,7 @@ func svgHeader(output *strings.Builder, renderer *Renderer) int {
 			227+index*22, html.EscapeString(caveat),
 		)
 	}
-	if report.Config.Mode == "tui" {
+	if report.Config.IsTUI() {
 		duration := "until exit"
 		if report.Config.DurationSeconds > 0 {
 			duration = formatDuration(report.Config.DurationSeconds)

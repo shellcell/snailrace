@@ -9,15 +9,11 @@ import (
 	"github.com/shellcell/snailrace/internal/model"
 )
 
-func writeHTMLRanking(writer io.Writer, report model.Report) {
-	writeHTMLRankingWith(writer, report, calculateRanking(report))
-}
-
-func writeHTMLRankingWith(writer io.Writer, report model.Report, ranking rankingData) {
-	if len(ranking.rows) == 0 {
+func writeHTMLRanking(writer io.Writer, report model.Report, ranking rankingData) {
+	if len(ranking.Rows) == 0 {
 		fmt.Fprintf(
 			writer, `<section><h2>Ranking unavailable</h2><p class="uncertain">%s</p></section>`,
-			html.EscapeString(ranking.unavailableReason),
+			html.EscapeString(ranking.UnavailableReason),
 		)
 		return
 	}
@@ -38,10 +34,10 @@ func writeHTMLRankingWith(writer io.Writer, report model.Report, ranking ranking
 			html.EscapeString(winner.value),
 		)
 	}
-	if !ranking.available {
+	if !ranking.Available {
 		fmt.Fprintf(
 			writer, `</div><h2>Overall ranking unavailable</h2><p class="uncertain">%s</p></section>`,
-			html.EscapeString(ranking.unavailableReason),
+			html.EscapeString(ranking.UnavailableReason),
 		)
 		return
 	}
@@ -60,20 +56,20 @@ func writeHTMLRankingWith(writer io.Writer, report model.Report, ranking ranking
 		rankingHeader(5, "RAM aggregate", "number")+
 		rankingHeader(6, "Linked size", "number")+
 		`</tr></thead><tbody>`)
-	for _, row := range ranking.rows {
+	for _, row := range ranking.Rows {
 		ramValue := "N/A"
-		if ranking.ramAvailable {
+		if ranking.RAMAvailable {
 			ramValue = rankingHTMLCell(
-				formatBytes(row.ramValue), row.ramScore, row.ramRank, true,
+				formatBytes(row.RAMValue), row.RAMScore, row.RAMRank, true,
 			)
-		} else if ranking.ramPresent {
+		} else if ranking.RAMPresent {
 			ramValue = fmt.Sprintf(
 				`<strong>%s</strong><span class="delta muted">sampling-limited</span>`,
-				html.EscapeString(formatBytes(row.ramValue)),
+				html.EscapeString(formatBytes(row.RAMValue)),
 			)
 		}
 		class := ""
-		if row.overallRank == 1 {
+		if row.OverallRank == 1 {
 			class = ` class="rank-one"`
 		}
 		fmt.Fprintf(
@@ -85,29 +81,29 @@ func writeHTMLRankingWith(writer io.Writer, report model.Report, ranking ranking
 				`<td data-sort-value="%g">%s</td>`+
 				`<td data-sort-value="%g">%s</td>`+
 				`<td data-sort-value="%g">%s</td></tr>`,
-			class, row.overallRank, row.overallRank,
-			html.EscapeString(report.Benchmarks[row.benchmark].Tool.Name),
-			rankingHTMLTool(report, row.benchmark),
-			row.overallScore,
+			class, row.OverallRank, row.OverallRank,
+			html.EscapeString(report.Benchmarks[row.Benchmark].Tool.Name),
+			htmlToolLabel(report, row.Benchmark, true),
+			row.OverallScore,
 			rankingHTMLCell(
-				formatScore(row.overallScore), row.overallScore/ranking.bestOverall,
-				row.overallRank, true,
+				formatScore(row.OverallScore), row.OverallScore/ranking.BestOverall,
+				row.OverallRank, true,
 			),
-			row.primaryValue,
+			row.PrimaryValue,
 			rankingHTMLCell(
-				ranking.primaryUnit(row.primaryValue), row.primaryScore,
-				row.primaryRank, ranking.primaryRatio,
+				ranking.primaryUnit(row.PrimaryValue), row.PrimaryScore,
+				row.PrimaryRank, ranking.PrimaryRatio,
 			),
-			row.cpuValue,
+			row.CPUValue,
 			rankingHTMLCell(
-				cpuRankingValue(report, row), row.cpuScore, row.cpuRank, ranking.cpuRatio,
+				cpuRankingValue(report, row), row.CPUScore, row.CPURank, ranking.CPURatio,
 			),
-			row.ramValue,
+			row.RAMValue,
 			ramValue,
-			row.footprintValue,
+			row.FootprintValue,
 			rankingHTMLCell(
-				formatBytes(row.footprintValue), row.footprintScore,
-				row.footprintRank, ranking.footprintRatio,
+				formatBytes(row.FootprintValue), row.FootprintScore,
+				row.FootprintRank, ranking.FootprintRatio,
 			),
 		)
 	}
@@ -129,10 +125,6 @@ const rankingSortScript = `<script>(()=>{const t=document.getElementById('rankin
 	`y=c.cells[i].dataset.sortValue||c.cells[i].textContent;if(n){x=+x;y=+y}` +
 	`return(x<y?-1:x>y?1:0)*(asc?1:-1)});for(const r of rows)body.appendChild(r);` +
 	`b.dataset.order=asc?'asc':'desc'})})()</script>`
-
-func rankingHTMLTool(report model.Report, index int) string {
-	return htmlToolLabel(report, index, true)
-}
 
 func rankingHTMLCell(value string, score float64, rank int, ratioAvailable bool) string {
 	if math.IsInf(score, 1) || math.IsNaN(score) {

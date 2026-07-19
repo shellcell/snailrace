@@ -22,6 +22,17 @@ type Config struct {
 	OutputMode        string        `json:"output_mode"`
 }
 
+const (
+	ModeCommand = "command"
+	ModeTUI     = "tui"
+)
+
+func (config Config) IsTUI() bool { return config.Mode == ModeTUI }
+
+func (config Config) FixedDurationTUI() bool {
+	return config.IsTUI() && config.DurationSeconds > 0
+}
+
 type HostInfo struct {
 	OS                string `json:"os"`
 	Architecture      string `json:"architecture"`
