@@ -80,6 +80,27 @@ func TestTooFewValidSamplesMarksMetricsAsLimited(t *testing.T) {
 	}
 }
 
+func TestPhysicalFootprintComparisonExcludesInvalidPairs(t *testing.T) {
+	baselineRuns := []model.Run{
+		{Index: 1, PeakPhysicalFootprintBytes: 100, PhysicalFootprintValid: true},
+		{Index: 2, PeakPhysicalFootprintBytes: 1000},
+	}
+	candidateRuns := []model.Run{
+		{Index: 1, PeakPhysicalFootprintBytes: 90, PhysicalFootprintValid: true},
+		{Index: 2, PeakPhysicalFootprintBytes: 1},
+	}
+	baseline := model.Benchmark{Runs: baselineRuns, Summary: model.Summarize(baselineRuns)}
+	candidate := model.Benchmark{Runs: candidateRuns, Summary: model.Summarize(candidateRuns)}
+	result := compareMetric(baseline, candidate, metricRows[8], 0)
+	if result.difference.N != 1 || result.difference.Mean != -10 {
+		t.Fatalf("physical footprint difference = %+v", result.difference)
+	}
+	if result.baselineMean != 100 || result.candidateMean != 90 ||
+		math.Abs(result.percent+10) > 1e-9 {
+		t.Fatalf("paired physical footprint means = %+v", result)
+	}
+}
+
 func benchmarkWithWallTimes(name string, values ...float64) model.Benchmark {
 	runs := make([]model.Run, len(values))
 	for index, value := range values {

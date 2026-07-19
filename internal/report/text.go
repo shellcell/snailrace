@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"strings"
 	"text/tabwriter"
 
 	"golang.org/x/term"
@@ -39,6 +38,10 @@ func writeVerboseText(writer io.Writer, report model.Report) error {
 		report.Config.Mode, report.Config.Runs, report.Config.Warmups,
 		formatNumber(report.Config.IntervalMS),
 	)
+	fmt.Fprintf(w, "Included dimensions\t%s\n", includedDimensionsText(report))
+	for _, caveat := range reliabilityCaveats(report) {
+		fmt.Fprintf(w, "Reliability\t%s\n", caveat)
+	}
 	if report.Config.Mode == "tui" {
 		duration := "until exit"
 		if report.Config.DurationSeconds > 0 {
@@ -99,7 +102,7 @@ func writeTextBenchmark(
 		label += " [BASELINE]"
 	}
 	fmt.Fprintf(w, "%s\t\n", label)
-	commandLines := wrapText(strings.Join(benchmark.Tool.Command, " "), 100)
+	commandLines := wrapText(fullCommand(benchmark), 100)
 	for index, line := range commandLines {
 		field := ""
 		if index == 0 {
@@ -125,7 +128,7 @@ func writeTextBenchmark(
 	}
 	fmt.Fprintln(w, "Metric\tMean ± σ\t95% CI mean\tMedian\tP95\tRange")
 	for _, row := range metricRows {
-		if !available(row, operatingSystem) {
+		if !availableFor(row, operatingSystem, benchmark.Summary) {
 			fmt.Fprintf(w, "%s\tN/A\tN/A\tN/A\tN/A\tN/A\n", row.name)
 			continue
 		}

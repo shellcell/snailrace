@@ -37,7 +37,7 @@ func measurementTrendCharts(report model.Report) []svgChart {
 }
 
 func measurementTrendChart(report model.Report, benchmarkIndex int, group chartGroup) svgChart {
-	lanes := trendLanes(report, group)
+	lanes := trendLanes(report, benchmarkIndex, group)
 	if len(lanes) == 0 {
 		return svgChart{}
 	}
@@ -92,12 +92,18 @@ func measurementTrendChart(report model.Report, benchmarkIndex int, group chartG
 			minimum, maximum := valueRange(values)
 			color := style.Tool(metric.row).Hex
 			var path strings.Builder
+			started := false
 			for index, value := range values {
+				if math.IsNaN(value) {
+					started = false
+					continue
+				}
 				command := "L"
-				if index == 0 {
+				if !started {
 					command = "M"
 				}
 				fmt.Fprintf(&path, "%s %.1f %.1f ", command, x(index), positionY(value))
+				started = true
 			}
 			fmt.Fprintf(
 				&body,
@@ -105,6 +111,9 @@ func measurementTrendChart(report model.Report, benchmarkIndex int, group chartG
 				path.String(), color,
 			)
 			for index, value := range values {
+				if math.IsNaN(value) {
+					continue
+				}
 				fmt.Fprintf(
 					&body, `<circle class="trend-dot" cx="%.1f" cy="%.1f" r="1.5" fill="%s"/>`,
 					x(index), positionY(value), color,
@@ -131,7 +140,11 @@ func measurementTrendChart(report model.Report, benchmarkIndex int, group chartG
 func trendValues(runs []model.Run, metric chartMetric) []float64 {
 	values := make([]float64, len(runs))
 	for index, run := range runs {
-		values[index] = metric.run(run)
+		if chartRunAvailable(metric, run) {
+			values[index] = metric.run(run)
+		} else {
+			values[index] = math.NaN()
+		}
 	}
 	return values
 }
@@ -139,6 +152,9 @@ func trendValues(runs []model.Run, metric chartMetric) []float64 {
 func valueRange(values []float64) (float64, float64) {
 	minimum, maximum := math.Inf(1), math.Inf(-1)
 	for _, value := range values {
+		if math.IsNaN(value) {
+			continue
+		}
 		minimum = math.Min(minimum, value)
 		maximum = math.Max(maximum, value)
 	}
@@ -152,6 +168,9 @@ func trendLaneRange(runs []model.Run, metrics []chartMetric) (float64, float64) 
 	minimum, maximum := math.Inf(1), math.Inf(-1)
 	for _, metric := range metrics {
 		for _, run := range runs {
+			if !chartRunAvailable(metric, run) {
+				continue
+			}
 			value := metric.run(run)
 			minimum = math.Min(minimum, value)
 			maximum = math.Max(maximum, value)
@@ -163,8 +182,8 @@ func trendLaneRange(runs []model.Run, metrics []chartMetric) (float64, float64) 
 	return minimum, maximum
 }
 
-func trendLanes(report model.Report, group chartGroup) []trendLane {
-	metrics := trendMetrics(report, group.metrics)
+func trendLanes(report model.Report, benchmarkIndex int, group chartGroup) []trendLane {
+	metrics := trendMetrics(report, benchmarkIndex, group.metrics)
 	byRow := make(map[int]chartMetric, len(metrics))
 	for _, metric := range metrics {
 		byRow[metric.row] = metric
@@ -224,10 +243,15 @@ func trendLaneDefinitions(byRow map[int]chartMetric, specs ...trendLaneSpec) []t
 	return lanes
 }
 
-func trendMetrics(report model.Report, metrics []chartMetric) []chartMetric {
+func trendMetrics(
+	report model.Report, benchmarkIndex int, metrics []chartMetric,
+) []chartMetric {
 	result := make([]chartMetric, 0, len(metrics))
 	for _, metric := range metrics {
-		if available(metricRows[metric.row], report.Host.OS) {
+		if availableFor(
+			metricRows[metric.row], report.Host.OS,
+			report.Benchmarks[benchmarkIndex].Summary,
+		) {
 			result = append(result, metric)
 		}
 	}

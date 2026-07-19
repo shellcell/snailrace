@@ -25,7 +25,7 @@ func deltaForestChart(report model.Report, group chartGroup) svgChart {
 	maximum := 0.0
 	for _, metric := range group.metrics {
 		row := metricRows[metric.row]
-		if !available(row, report.Host.OS) {
+		if !availableFor(row, report.Host.OS, baseline.Summary) {
 			rows = append(rows, forestRow{
 				label: metric.name, status: "N/A on " + report.Host.OS,
 				class: "neutral", identity: toolColor(report, baselinePosition),
@@ -52,6 +52,13 @@ func deltaForestChart(report model.Report, group chartGroup) svgChart {
 				if index == baselinePosition {
 					continue
 				}
+				if !availableFor(row, report.Host.OS, candidate.Summary) {
+					rows = append(rows, forestRow{
+						label:  metric.name + " · " + candidate.Tool.Name,
+						status: "N/A", class: "neutral", identity: toolColor(report, index),
+					})
+					continue
+				}
 				value := metric.stats(candidate).Mean
 				delta := compareMetric(
 					baseline, candidate, row, report.Config.IntervalMS/1000,
@@ -67,6 +74,13 @@ func deltaForestChart(report model.Report, group chartGroup) svgChart {
 		}
 		for index, candidate := range report.Benchmarks {
 			if index == baselinePosition {
+				continue
+			}
+			if !availableFor(row, report.Host.OS, candidate.Summary) {
+				rows = append(rows, forestRow{
+					label:  metric.name + " · " + candidate.Tool.Name,
+					status: "N/A", class: "neutral", identity: toolColor(report, index),
+				})
 				continue
 			}
 			delta := compareMetric(

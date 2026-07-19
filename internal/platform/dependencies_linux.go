@@ -1,19 +1,26 @@
 package platform
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
 
-func LinkedFiles(executable string) []LinkedDependency {
-	output, _ := exec.Command("ldd", executable).CombinedOutput()
+func LinkedFiles(ctx context.Context, executable string) ([]LinkedDependency, error) {
+	output, _ := exec.CommandContext(ctx, "ldd", executable).CombinedOutput()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	files := parseLDD(output)
 	if len(files) == 0 {
 		if interpreter := shebangInterpreter(executable); interpreter != "" {
 			files = append(files, interpreter)
-			output, _ = exec.Command("ldd", interpreter).CombinedOutput()
+			output, _ = exec.CommandContext(ctx, "ldd", interpreter).CombinedOutput()
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			files = append(files, parseLDD(output)...)
 		}
 	}
@@ -22,7 +29,7 @@ func LinkedFiles(executable string) []LinkedDependency {
 	for index, path := range paths {
 		result[index] = LinkedDependency{Path: path}
 	}
-	return result
+	return result, nil
 }
 
 func parseLDD(output []byte) []string {

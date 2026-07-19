@@ -22,6 +22,7 @@ func makeTUIRun(
 		AverageCPUPercent:          averageCPUPercent(user, system, elapsed),
 		PeakResidentBytes:          float64(peak.ResidentBytes),
 		PeakPhysicalFootprintBytes: float64(peak.PhysicalFootprintBytes),
+		PhysicalFootprintValid:     peak.PhysicalFootprintValid,
 		OSMaxRSSBytes:              float64(rusageRSS),
 		MeanResidentBytes:          sampledMeanResident(peak),
 		PeakVirtualBytes:           float64(peak.VirtualBytes),

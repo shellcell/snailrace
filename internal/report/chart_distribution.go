@@ -13,6 +13,11 @@ func absoluteDistributionChart(report model.Report, metric chartMetric) svgChart
 	if !available(metricRows[metric.row], report.Host.OS) {
 		return unavailableChart("RUN DISTRIBUTION · "+metric.name, report.Host.OS)
 	}
+	for _, benchmark := range report.Benchmarks {
+		if !availableFor(metricRows[metric.row], report.Host.OS, benchmark.Summary) {
+			return unavailableChart("RUN DISTRIBUTION · "+metric.name, "metric unavailable")
+		}
+	}
 	minimum, maximum := 0.0, 0.0
 	for _, benchmark := range report.Benchmarks {
 		stats := metric.stats(benchmark)
@@ -57,6 +62,9 @@ func absoluteDistributionChart(report model.Report, metric chartMetric) svgChart
 			left, y-4, left+plotWidth,
 		)
 		for runIndex, run := range benchmark.Runs {
+			if !chartRunAvailable(metric, run) {
+				continue
+			}
 			jitter := (runIndex%3 - 1) * 5
 			fmt.Fprintf(
 				&body, `<circle class="run-dot" cx="%.1f" cy="%d" `+

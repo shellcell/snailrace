@@ -60,6 +60,7 @@ func runOnce(
 		AverageCPUPercent:          averageCPUPercent(user, system, elapsed),
 		PeakResidentBytes:          float64(peak.ResidentBytes),
 		PeakPhysicalFootprintBytes: float64(peak.PhysicalFootprintBytes),
+		PhysicalFootprintValid:     peak.PhysicalFootprintValid,
 		OSMaxRSSBytes:              float64(rusageRSS),
 		MeanResidentBytes:          meanResident,
 		PeakVirtualBytes:           float64(peak.VirtualBytes),
@@ -98,12 +99,18 @@ func monitor(
 		peak.SampleCoverageSeconds += seconds
 	}
 	sample := func() {
-		if current, valid := platform.SampleTree(pid); valid {
-			now := time.Now()
-			addCoverage(now)
-			updatePeaks(&peak, current)
-			previousRSS, previousAt = current.ResidentBytes, now
+		current, valid := platform.SampleTree(pid)
+		if !valid {
+			if current.PhysicalFootprintInvalid {
+				peak.PhysicalFootprintInvalid = true
+				peak.PhysicalFootprintValid = false
+			}
+			return
 		}
+		now := time.Now()
+		addCoverage(now)
+		updatePeaks(&peak, current)
+		previousRSS, previousAt = current.ResidentBytes, now
 	}
 	if platform.SampleImmediately() {
 		sample()
@@ -121,12 +128,19 @@ func monitor(
 }
 
 func updatePeaks(peak *platform.Metrics, current platform.Metrics) {
+	firstSample := peak.SampleCount == 0
 	peak.ResidentByteSamples += current.ResidentBytes
 	peak.SampleCount++
 	peak.ResidentBytes = max(peak.ResidentBytes, current.ResidentBytes)
-	peak.PhysicalFootprintBytes = max(
-		peak.PhysicalFootprintBytes, current.PhysicalFootprintBytes,
-	)
+	if current.PhysicalFootprintValid {
+		peak.PhysicalFootprintBytes = max(
+			peak.PhysicalFootprintBytes, current.PhysicalFootprintBytes,
+		)
+	}
+	peak.PhysicalFootprintInvalid = peak.PhysicalFootprintInvalid ||
+		current.PhysicalFootprintInvalid
+	peak.PhysicalFootprintValid = current.PhysicalFootprintValid &&
+		!peak.PhysicalFootprintInvalid && (firstSample || peak.PhysicalFootprintValid)
 	peak.VirtualBytes = max(peak.VirtualBytes, current.VirtualBytes)
 	peak.Processes = max(peak.Processes, current.Processes)
 	peak.Threads = max(peak.Threads, current.Threads)

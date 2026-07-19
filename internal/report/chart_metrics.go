@@ -52,6 +52,10 @@ func chartGroups(report model.Report) []chartGroup {
 	return groups
 }
 
+func chartRunAvailable(metric chartMetric, run model.Run) bool {
+	return metric.row != 8 || run.PhysicalFootprintValid
+}
+
 func chartMetricDefinitions() []chartMetric {
 	return []chartMetric{
 		{"Wall time", formatDuration,

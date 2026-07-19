@@ -34,6 +34,10 @@ Commands with non-zero measured exits continue through all configured rounds,
 but are reported as failures and excluded from rankings.
 If none of the selected dimensions is usable, the balanced ranking is marked
 unavailable instead of selecting a winner.
+.Pp
+For simple external shell commands, executable metadata and disk footprint
+describe the leading command. Shell builtins describe the shell itself.
+Scripts retain their original invocation path.
 The
 .Cm tui
 subcommand renders a live terminal view while measuring.
@@ -82,6 +86,8 @@ The default is
 Directory for a saved report; defaults to the current directory.
 Reports are staged before publication and receive a numeric suffix instead of
 overwriting an existing report with the same name.
+.It Fl no-save
+Do not save report files; write the text report to standard output only.
 .It Fl verbose
 Print full statistical tables to stdout.
 .It Fl show-output
@@ -101,7 +107,7 @@ TUI rows; default inherits the terminal.
 .It Fl v , Fl version
 Print version and exit.
 .It Fl h , Fl help
-Show help.
+Show help and exit successfully.
 .El
 .Sh EXAMPLES
 Benchmark one command with warmups:

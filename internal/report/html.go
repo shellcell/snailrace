@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"html"
 	"io"
-	"strings"
 
 	"github.com/shellcell/snailrace/internal/model"
 )
@@ -69,6 +68,16 @@ func writeHTML(writer io.Writer, report model.Report) error {
 		html.EscapeString(report.Host.OS), html.EscapeString(report.Host.Architecture),
 	)
 	writeCards(writer, report)
+	fmt.Fprintf(
+		writer, `<p class="muted">Balanced index dimensions actually included: %s.</p>`,
+		html.EscapeString(includedDimensionsText(report)),
+	)
+	for _, caveat := range reliabilityCaveats(report) {
+		fmt.Fprintf(
+			writer, `<p class="uncertain">Reliability: %s.</p>`,
+			html.EscapeString(caveat),
+		)
+	}
 	writeHTMLCommandLegend(writer, report)
 	writeHTMLFailures(writer, report)
 	if len(report.Benchmarks) > 1 {
@@ -212,7 +221,7 @@ func writeHTMLBenchmark(
 	}
 	fmt.Fprintf(
 		writer, `<pre class="command"><code>%s</code></pre>`,
-		html.EscapeString(strings.Join(benchmark.Tool.Command, " ")),
+		html.EscapeString(fullCommand(benchmark)),
 	)
 	fmt.Fprintf(
 		writer,
@@ -257,7 +266,7 @@ func writeHTMLRow(
 	row metricRow,
 	summary model.Summary,
 ) {
-	if !available(row, operatingSystem) {
+	if !availableFor(row, operatingSystem, summary) {
 		fmt.Fprintf(writer, "<tr><td>%s</td><td colspan=\"5\">N/A</td></tr>", row.name)
 		return
 	}

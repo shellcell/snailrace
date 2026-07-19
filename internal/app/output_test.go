@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -39,6 +40,29 @@ func TestSavingAlsoWritesCompleteReportToStdout(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("saved files = %d, want 1", len(entries))
 	}
+}
+
+func TestStdoutFailureDoesNotPreventSaving(t *testing.T) {
+	directory := t.TempDir()
+	report := model.Report{
+		Config:     model.Config{Mode: "command", Baseline: 1},
+		Benchmarks: []model.Benchmark{{Tool: model.ToolInfo{Name: "tool"}}},
+	}
+	if err := writeResult(
+		failingWriter{}, io.Discard, directory, []string{"html"}, report,
+	); err == nil {
+		t.Fatal("stdout failure should be returned")
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("saved entries = %v, error = %v", entries, err)
+	}
+}
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) {
+	return 0, errors.New("write failed")
 }
 
 func TestSavedFormatDoesNotReplaceTextStdout(t *testing.T) {
@@ -140,6 +164,21 @@ func TestRunSavesDefaultHTMLInCurrentDirectory(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "Report saved to") {
 		t.Fatal("stderr does not announce the default report path")
+	}
+}
+
+func TestRunNoSaveLeavesCurrentDirectoryEmpty(t *testing.T) {
+	directory := t.TempDir()
+	t.Chdir(directory)
+	if err := Run(
+		[]string{"-no-save", "-n", "1", "-warmups", "0", "--", "/bin/true"},
+		io.Discard, io.Discard,
+	); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("no-save entries = %v, error = %v", entries, err)
 	}
 }
 

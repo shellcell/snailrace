@@ -76,7 +76,7 @@ func writeHTMLComparisonRow(
 	baseline, candidate model.Benchmark,
 	row metricRow,
 ) {
-	if !available(row, operatingSystem) {
+	if !availableFor(row, operatingSystem, baseline.Summary, candidate.Summary) {
 		fmt.Fprintf(writer, "<tr><td>%s</td><td colspan=\"3\">N/A</td></tr>", row.name)
 		return
 	}
@@ -86,8 +86,8 @@ func writeHTMLComparisonRow(
 		`<tr><td>%s</td><td class="neutral">%s</td><td class="%s">%s</td>`+
 			`<td><strong class="%s">%s</strong>`+
 			`<span class="delta muted">%s</span></td></tr>`,
-		row.name, row.format(row.stats(baseline.Summary).Mean), delta.class,
-		row.format(row.stats(candidate.Summary).Mean), delta.class,
+		row.name, row.format(delta.baselineMean), delta.class,
+		row.format(delta.candidateMean), delta.class,
 		html.EscapeString(formatDelta(delta, row)),
 		html.EscapeString(formatDeltaInterval(delta, row)),
 	)

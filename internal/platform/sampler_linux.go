@@ -15,55 +15,31 @@ func DefaultInterval() time.Duration { return 10 * time.Millisecond }
 func SampleImmediately() bool { return true }
 
 func SampleTree(rootPID int) (Metrics, bool) {
-	seen := make(map[int]bool)
-	queue := []int{rootPID}
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return Metrics{}, false
+	}
 	var total Metrics
-	for len(queue) > 0 {
-		pid := queue[0]
-		queue = queue[1:]
-		if seen[pid] {
+	rootFound := false
+	for _, entry := range entries {
+		pid, err := strconv.Atoi(entry.Name())
+		if err != nil {
 			continue
 		}
-		seen[pid] = true
 		record, err := readProcess(pid)
-		if err != nil {
-			if pid == rootPID {
-				return Metrics{}, false
-			}
+		if err != nil || record.GroupID != rootPID {
 			continue
+		}
+		if record.PID == rootPID {
+			rootFound = true
 		}
 		total.ResidentBytes += record.ResidentBytes
 		total.VirtualBytes += record.VirtualBytes
 		total.Processes++
 		total.Threads += record.Threads
 		total.FileDescriptors += record.FileDescriptors
-		queue = append(queue, readChildren(pid)...)
 	}
-	return total, true
-}
-
-func readChildren(pid int) []int {
-	taskDirectory := filepath.Join("/proc", strconv.Itoa(pid), "task")
-	tasks, err := os.ReadDir(taskDirectory)
-	if err != nil {
-		return nil
-	}
-	seen := make(map[int]bool)
-	children := make([]int, 0, 2)
-	for _, task := range tasks {
-		data, readErr := os.ReadFile(filepath.Join(taskDirectory, task.Name(), "children"))
-		if readErr != nil {
-			continue
-		}
-		for _, field := range strings.Fields(string(data)) {
-			child, parseErr := strconv.Atoi(field)
-			if parseErr == nil && !seen[child] {
-				seen[child] = true
-				children = append(children, child)
-			}
-		}
-	}
-	return children
+	return total, rootFound
 }
 
 func readProcess(pid int) (Process, error) {
@@ -81,6 +57,7 @@ func readProcess(pid int) (Process, error) {
 		return Process{}, errors.New("short process stat")
 	}
 	ppid, _ := strconv.Atoi(fields[1])
+	groupID, _ := strconv.Atoi(fields[2])
 	threads, _ := strconv.ParseUint(fields[17], 10, 64)
 	virtual, _ := strconv.ParseUint(fields[20], 10, 64)
 	rssPages, _ := strconv.ParseInt(fields[21], 10, 64)
@@ -88,7 +65,7 @@ func readProcess(pid int) (Process, error) {
 		rssPages = 0
 	}
 	return Process{
-		PID: pid, PPID: ppid, Threads: threads, VirtualBytes: virtual,
+		PID: pid, PPID: ppid, GroupID: groupID, Threads: threads, VirtualBytes: virtual,
 		ResidentBytes:   uint64(rssPages) * uint64(os.Getpagesize()),
 		FileDescriptors: countDirectory(filepath.Join(base, "fd")),
 	}, nil

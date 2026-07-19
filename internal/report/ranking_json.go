@@ -40,20 +40,25 @@ type jsonRankingRow struct {
 }
 
 type jsonRanking struct {
-	Available         bool             `json:"available"`
-	UnavailableReason string           `json:"unavailable_reason,omitempty"`
-	Method            string           `json:"method"`
-	PrimaryMetric     string           `json:"primary_metric"`
-	Winners           []jsonWinner     `json:"winners"`
-	Rows              []jsonRankingRow `json:"rows"`
+	Available          bool             `json:"available"`
+	UnavailableReason  string           `json:"unavailable_reason,omitempty"`
+	Method             string           `json:"method"`
+	PrimaryMetric      string           `json:"primary_metric"`
+	IncludedDimensions []string         `json:"included_dimensions"`
+	Winners            []jsonWinner     `json:"winners"`
+	Rows               []jsonRankingRow `json:"rows"`
 }
 
 func writeJSON(writer io.Writer, report model.Report) error {
 	payload := struct {
 		model.Report
-		Ranking  jsonRanking   `json:"ranking"`
-		Failures []jsonFailure `json:"failures,omitempty"`
-	}{Report: report, Ranking: makeJSONRanking(report), Failures: makeJSONFailures(report)}
+		Ranking     jsonRanking   `json:"ranking"`
+		Failures    []jsonFailure `json:"failures,omitempty"`
+		Reliability []string      `json:"reliability_caveats,omitempty"`
+	}{
+		Report: report, Ranking: makeJSONRanking(report),
+		Failures: makeJSONFailures(report), Reliability: reliabilityCaveats(report),
+	}
 	encoder := json.NewEncoder(writer)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(payload)
@@ -78,7 +83,7 @@ func makeJSONRanking(report model.Report) jsonRanking {
 		Available: ranking.available, UnavailableReason: ranking.unavailableReason,
 		Method: "equal-weight geometric mean of normalized category costs; included: " +
 			balancedIndexCategories(ranking),
-		PrimaryMetric: ranking.primaryLabel,
+		PrimaryMetric: ranking.primaryLabel, IncludedDimensions: includedDimensions(report),
 	}
 	for _, winner := range ranking.winners {
 		result.Winners = append(result.Winners, jsonWinner{

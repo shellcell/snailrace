@@ -18,6 +18,7 @@ func WriteMarkdownWithCharts(
 	charts []ChartArtifact,
 	chartDirectory string,
 ) error {
+	report = safeDisplayReport(report)
 	checked := newErrorWriter(writer)
 	writer = checked
 	fmt.Fprintf(
@@ -28,6 +29,13 @@ func WriteMarkdownWithCharts(
 		report.Host.OS, report.Host.Architecture,
 		report.Config.Runs, report.Config.Warmups, report.Config.Mode,
 	)
+	fmt.Fprintf(
+		writer, "Balanced index dimensions actually included: **%s**.\n\n",
+		escapeMarkdown(includedDimensionsText(report)),
+	)
+	for _, caveat := range reliabilityCaveats(report) {
+		fmt.Fprintf(writer, "> Reliability: %s.\n\n", escapeMarkdown(caveat))
+	}
 	writeMarkdownCommandLegend(writer, report)
 	writeMarkdownFailures(writer, report)
 	if len(report.Benchmarks) > 1 {
@@ -79,7 +87,7 @@ func writeMarkdownBenchmark(
 			"Disk footprint: %s executable + %s linked = %s "+
 			"(%d files; %d dyld-cache dependencies excluded)\n\n",
 		escapeMarkdown(label),
-		strings.Join(benchmark.Tool.Command, " "),
+		fullCommand(benchmark),
 		benchmark.Tool.SHA256,
 		formatBytes(float64(benchmark.Tool.SizeBytes)),
 		formatBytes(float64(benchmark.Tool.LinkedSizeBytes)),
@@ -105,7 +113,7 @@ func writeMarkdownBenchmark(
 	)
 	fmt.Fprintln(writer, "|---|---:|---:|---:|---:|---:|")
 	for _, row := range metricRows {
-		if !available(row, operatingSystem) {
+		if !availableFor(row, operatingSystem, benchmark.Summary) {
 			fmt.Fprintf(writer, "| %s | N/A | N/A | N/A | N/A | N/A |\n", row.name)
 			continue
 		}

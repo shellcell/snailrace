@@ -13,6 +13,7 @@ _snailrace() {
     '-baseline[set 1-based baseline]:index:' \
     '*'{-f,-format}'[select report format]:format:(html svg markdown json text)' \
     '(-o -output)'{-o,-output}'[set report directory]:directory:_directories' \
+    '-no-save[do not save report files]' \
     '-verbose[print full statistical tables]' \
     '-show-output[forward command output]' \
     '(-d -duration)'{-d,-duration}'[set fixed TUI duration]:duration:' \

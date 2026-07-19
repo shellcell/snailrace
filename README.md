@@ -66,6 +66,8 @@ An HTML report is saved to the current directory by default. Choose another dire
 ./snailrace -format html -output ./reports -- ./my-program --flag
 ```
 
+Use `-no-save` when only stdout output is wanted.
+
 Measure an interactive TUI:
 
 ```sh
@@ -87,6 +89,7 @@ Measure an interactive TUI:
 | `-baseline` | 1-based baseline; `0` selects the winner |
 | `-f`, `-format` | Saved format; default `html` |
 | `-o`, `-output` | Report directory; default current directory |
+| `-no-save` | Do not save report files |
 | `-verbose` | Full statistical tables on stdout |
 | `-show-output` | Forward command output to stderr |
 | `tui` | Run inside a pseudo-terminal |
@@ -106,6 +109,8 @@ Measure an interactive TUI:
 
 Raw runs and summary statistics are available in JSON. Reports include mean,
 sample standard deviation, median, p95, range, and a 95% Student's t interval.
+Every format identifies the dimensions actually included in the balanced index
+and records sampling or metric-availability caveats.
 
 ## Method
 
@@ -117,22 +122,28 @@ sample standard deviation, median, p95, range, and a 95% Student's t interval.
 - If none of the selected dimensions is usable, reports mark the balanced ranking unavailable.
 - Ctrl+C keeps completed comparison rounds.
 - Command output is discarded unless `-show-output` is set.
+- Native executables run through the inspected artifact and are identity/hash-checked after measurement.
+- Scripts preserve their original invocation path so `$0`-relative behavior is unchanged.
 
 Saved reports are staged before publication and receive a numeric suffix rather
 than overwriting an existing report with the same timestamp.
 
 ## Platform Notes
 
-- Linux reads `/proc` and follows each process's children.
+- Linux reads `/proc` and measures every member of the command's process group,
+  including descendants reparented while the benchmark is running.
 - macOS uses cgo with `proc_listpgrppids`, `proc_pidinfo`, and
   `proc_pid_rusage`.
 - macOS physical footprint estimates memory pressure charged to each process.
+- Physical-footprint validity is tracked per run; unavailable samples are not treated as zero.
 - Tree RSS can double-count shared pages.
 - Sampled peaks can miss activity shorter than the interval.
 - macOS does not report file descriptor counts.
 
 ## Disk Footprint
 
+- For a simple external `-c` command, disk footprint describes its leading executable;
+  shell builtins describe the shell itself.
 - Disk-backed `@rpath`, `@loader_path`, and `@executable_path` libraries are
   resolved recursively.
 - macOS dyld shared-cache libraries are listed but excluded from byte totals.

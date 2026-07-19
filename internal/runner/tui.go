@@ -22,21 +22,33 @@ func runTUIOnce(
 	interval time.Duration,
 	options Options,
 ) (model.Run, error) {
-	if options.Interactive && (!term.IsTerminal(int(os.Stdin.Fd())) ||
-		!term.IsTerminal(int(os.Stdout.Fd()))) {
+	input := options.Input
+	if input == nil {
+		input = os.Stdin
+	}
+	output := options.TerminalOut
+	if output == nil {
+		output = os.Stdout
+	}
+	inputTerminal, inputIsTerminal := input.(interface{ Fd() uintptr })
+	outputTerminal, outputIsTerminal := output.(interface{ Fd() uintptr })
+	inputFile, inputIsFile := input.(*os.File)
+	if options.Interactive && (!inputIsTerminal || !outputIsTerminal || !inputIsFile ||
+		!term.IsTerminal(int(inputTerminal.Fd())) ||
+		!term.IsTerminal(int(outputTerminal.Fd()))) {
 		return model.Run{}, errors.New(
 			"interactive TUI mode requires terminal stdin and stdout",
 		)
 	}
-	size := terminalSize(options.Width, options.Height)
+	size := terminalSize(inputFile, options.Width, options.Height)
 	var state *term.State
 	var err error
 	if options.Interactive {
-		state, err = term.MakeRaw(int(os.Stdin.Fd()))
+		state, err = term.MakeRaw(int(inputTerminal.Fd()))
 		if err != nil {
 			return model.Run{}, err
 		}
-		defer term.Restore(int(os.Stdin.Fd()), state)
+		defer term.Restore(int(inputTerminal.Fd()), state)
 	}
 
 	cmd := spec.command(ctx)
@@ -46,14 +58,23 @@ func runTUIOnce(
 		return model.Run{}, err
 	}
 	defer terminal.Close()
-	resizeContext, stopResize := context.WithCancel(ctx)
-	defer stopResize()
+	inputContext, stopInput := context.WithCancel(ctx)
+	outputContext, stopOutput := context.WithCancel(ctx)
+	defer stopInput()
+	defer stopOutput()
 	outputDone := make(chan struct{})
+	var inputDone, resizeDone <-chan struct{}
 	if options.Interactive {
-		go io.Copy(terminal, os.Stdin)
-		go copyTerminalOutput(os.Stdout, terminal, outputDone)
+		inputFinished := make(chan struct{})
+		inputDone = inputFinished
+		go copyTerminalInput(
+			inputContext, terminal, int(inputTerminal.Fd()), inputFinished,
+		)
+		go copyInteractiveTerminalOutput(
+			outputContext, int(terminal.Fd()), int(outputTerminal.Fd()), outputDone,
+		)
 		if options.FollowResize {
-			followTerminalResize(resizeContext, terminal)
+			resizeDone = followTerminalResize(inputContext, inputFile, terminal)
 		}
 	} else {
 		go copyTerminalOutput(io.Discard, terminal, outputDone)
@@ -71,6 +92,20 @@ func runTUIOnce(
 	signalProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
 	close(stopMonitor)
 	peak := <-monitorDone
+	stopInput()
+	if inputDone != nil {
+		<-inputDone
+	}
+	if resizeDone != nil {
+		<-resizeDone
+	}
+	select {
+	case <-outputDone:
+	case <-time.After(100 * time.Millisecond):
+		stopOutput()
+		_ = terminal.Close()
+		<-outputDone
+	}
 	user, system, rusageRSS := platform.ResourceUsage(cmd.ProcessState)
 	peak.Processes = max(peak.Processes, 1)
 	peak.Threads = max(peak.Threads, 1)
@@ -83,10 +118,6 @@ func runTUIOnce(
 	if waitResult.err != nil && waitResult.reason == "exited" &&
 		!isNonZeroExit(cmd, waitResult.err) {
 		return model.Run{}, waitResult.err
-	}
-	select {
-	case <-outputDone:
-	case <-time.After(100 * time.Millisecond):
 	}
 	return makeTUIRun(
 		cmd, waitResult.elapsed, user, system, rusageRSS, peak, waitResult.reason,

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -25,6 +26,9 @@ var Version = "dev"
 func Run(arguments []string, stdout, stderr io.Writer) error {
 	options, err := parseOptions(arguments, stderr)
 	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
 		return err
 	}
 	if options.version {
@@ -84,7 +88,7 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 			WarmupOrder:      warmupOrder,
 		}, runner.Options{
 			ShowOutput: options.showOutput, TUI: options.tui,
-			Output:   stderr,
+			Output: stderr, Input: os.Stdin, TerminalOut: os.Stdout,
 			Duration: options.duration, Width: width, Height: height,
 			Interactive:  interactiveTUI,
 			FollowResize: followResize,
@@ -149,8 +153,12 @@ func Run(arguments []string, stdout, stderr io.Writer) error {
 		Benchmarks: benchmarks, Verbose: options.verbose,
 		Notes: notes,
 	}
+	outputDirectory := options.output
+	if options.noSave {
+		outputDirectory = ""
+	}
 	if err := writeResult(
-		stdout, stderr, options.output, options.formats, result,
+		stdout, stderr, outputDirectory, options.formats, result,
 	); err != nil {
 		return err
 	}
@@ -206,13 +214,12 @@ func writeResult(
 	formats []string,
 	result model.Report,
 ) error {
-	if err := report.Write(stdout, "text", result); err != nil {
-		return err
+	var saveErr error
+	if directory != "" {
+		saveErr = saveReportFormats(stderr, directory, formats, result)
 	}
-	if directory == "" {
-		return nil
-	}
-	return saveReportFormats(stderr, directory, formats, result)
+	textErr := report.Write(stdout, "text", result)
+	return errors.Join(saveErr, textErr)
 }
 
 func modeName(tui bool) string {

@@ -13,14 +13,16 @@ func Summarize(runs []Run) Summary {
 		}
 		return result
 	}
-	physicalValues := values(func(r Run) float64 { return r.PeakPhysicalFootprintBytes })
-	var physicalStats *Stats
-	for _, value := range physicalValues {
-		if value > 0 {
-			value := stats(physicalValues)
-			physicalStats = &value
-			break
+	physicalValues := make([]float64, 0, len(runs))
+	for _, run := range runs {
+		if run.PhysicalFootprintValid {
+			physicalValues = append(physicalValues, run.PeakPhysicalFootprintBytes)
 		}
+	}
+	var physicalStats *Stats
+	if len(physicalValues) > 0 {
+		value := stats(physicalValues)
+		physicalStats = &value
 	}
 	return Summary{
 		WallSeconds: stats(values(func(r Run) float64 { return r.WallSeconds })),
@@ -66,36 +68,56 @@ func Summarize(runs []Run) Summary {
 func CalculateStats(values []float64) Stats { return stats(values) }
 
 func stats(values []float64) Stats {
-	if len(values) == 0 {
+	finite := make([]float64, 0, len(values))
+	for _, value := range values {
+		if !math.IsNaN(value) && !math.IsInf(value, 0) {
+			finite = append(finite, value)
+		}
+	}
+	if len(finite) == 0 {
 		return Stats{}
 	}
-	sorted := append([]float64(nil), values...)
+	sorted := append([]float64(nil), finite...)
 	sort.Float64s(sorted)
-	total := 0.0
-	for _, value := range sorted {
-		total += value
+	mean := 0.0
+	m2 := 0.0
+	varianceOverflow := false
+	for index, value := range sorted {
+		count := float64(index + 1)
+		previousMean := mean
+		mean = previousMean*(1-1/count) + value/count
+		if math.IsInf(mean, 0) {
+			mean = math.Copysign(math.MaxFloat64, mean)
+		}
+		delta := value - previousMean
+		term := delta * (value - mean)
+		if math.IsInf(term, 0) || math.IsNaN(term) || math.MaxFloat64-m2 < term {
+			varianceOverflow = true
+			m2 = math.MaxFloat64
+		} else if term > 0 {
+			m2 += term
+		}
 	}
-	mean := total / float64(len(sorted))
-	variance := 0.0
-	for _, value := range sorted {
-		delta := value - mean
-		variance += delta * delta
+	standardDeviation := 0.0
+	if len(sorted) > 1 && varianceOverflow {
+		standardDeviation = math.MaxFloat64
+	} else if len(sorted) > 1 {
+		standardDeviation = math.Sqrt(m2 / float64(len(sorted)-1))
 	}
-	if len(sorted) > 1 {
-		variance /= float64(len(sorted) - 1)
-	}
-	standardDeviation := math.Sqrt(variance)
 	margin := 0.0
 	validInterval := len(sorted) > 1
 	if len(sorted) > 1 {
-		margin = tCritical95(len(sorted)-1) * standardDeviation /
-			math.Sqrt(float64(len(sorted)))
+		margin = standardDeviation / math.Sqrt(float64(len(sorted))) *
+			tCritical95(len(sorted)-1)
+		if math.IsInf(margin, 0) {
+			margin = math.MaxFloat64
+		}
 	}
 	return Stats{
 		N: len(sorted), Min: sorted[0], Max: sorted[len(sorted)-1], Mean: mean,
 		StdDev: standardDeviation, Median: percentile(sorted, 0.5),
-		P95: percentile(sorted, 0.95), CI95Low: mean - margin,
-		CI95High: mean + margin, CI95Valid: validInterval,
+		P95: percentile(sorted, 0.95), CI95Low: finiteDifference(mean, margin),
+		CI95High: finiteSum(mean, margin), CI95Valid: validInterval,
 	}
 }
 
@@ -106,7 +128,23 @@ func percentile(sorted []float64, percentile float64) float64 {
 	position := percentile * float64(len(sorted)-1)
 	lower, upper := int(math.Floor(position)), int(math.Ceil(position))
 	weight := position - float64(lower)
-	return sorted[lower]*(1-weight) + sorted[upper]*weight
+	return finiteSum(sorted[lower]*(1-weight), sorted[upper]*weight)
+}
+
+func finiteSum(left, right float64) float64 {
+	result := left + right
+	if math.IsInf(result, 0) {
+		return math.Copysign(math.MaxFloat64, result)
+	}
+	return result
+}
+
+func finiteDifference(left, right float64) float64 {
+	result := left - right
+	if math.IsInf(result, 0) {
+		return math.Copysign(math.MaxFloat64, result)
+	}
+	return result
 }
 
 // Two-sided 95% Student's t critical values for 1..30 degrees of freedom.

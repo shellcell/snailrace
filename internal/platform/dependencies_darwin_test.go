@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -26,12 +27,14 @@ func TestResolveDylibUsesRPathAndIdentifiesSharedCache(t *testing.T) {
 	}
 	library, _ = filepath.EvalSymlinks(library)
 	dependency, ok := resolveDylib(
+		context.Background(),
 		"@rpath/liblocal.dylib", "/tmp/tool", "/tmp/tool", []string{directory},
 	)
 	if !ok || dependency.Path != library || dependency.SharedCache {
 		t.Fatalf("resolved dependency = %+v, valid=%v", dependency, ok)
 	}
 	dependency, ok = resolveDylib(
+		context.Background(),
 		"/usr/lib/libSystem.B.dylib", "/tmp/tool", "/tmp/tool", nil,
 	)
 	if !ok || !dependency.SharedCache {

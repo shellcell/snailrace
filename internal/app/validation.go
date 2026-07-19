@@ -28,6 +28,9 @@ func validateOptions(result options, commands []string, positional int) error {
 	if len(result.formats) == 0 {
 		return errors.New("at least one output format is required")
 	}
+	if !result.noSave && strings.TrimSpace(result.output) == "" {
+		return errors.New("output directory cannot be empty; use -no-save")
+	}
 	for _, format := range result.formats {
 		if !report.ValidFormat(format) {
 			return fmt.Errorf("unknown report format %q", format)

@@ -2,6 +2,7 @@ package report
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -137,6 +138,43 @@ func TestSamplingLimitedRAMIsShownButExcludedFromIndex(t *testing.T) {
 	}
 	if !foundRAMChart {
 		t.Fatal("RAM aggregate chart should still render when sampling-limited")
+	}
+}
+
+func TestAllFormatsExposeActualDimensionsAndReliability(t *testing.T) {
+	report := samplingLimitedRAMReport()
+	for _, format := range []string{"text", "markdown", "html", "svg"} {
+		var output bytes.Buffer
+		if err := Write(&output, format, report); err != nil {
+			t.Fatalf("%s: %v", format, err)
+		}
+		text := strings.ToLower(output.String())
+		if !strings.Contains(text, "time, cpu") {
+			t.Fatalf("%s omits actual included dimensions", format)
+		}
+		if !strings.Contains(text, "reliability") {
+			t.Fatalf("%s omits reliability caveat", format)
+		}
+		if !strings.Contains(text, "first:") || !strings.Contains(text, "second:") {
+			t.Fatalf("%s omits a per-tool reliability caveat", format)
+		}
+	}
+	var output bytes.Buffer
+	if err := Write(&output, "json", report); err != nil {
+		t.Fatal(err)
+	}
+	var decoded struct {
+		Ranking struct {
+			Included []string `json:"included_dimensions"`
+		} `json:"ranking"`
+		Reliability []string `json:"reliability_caveats"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(decoded.Ranking.Included, ",") != "time,cpu" ||
+		len(decoded.Reliability) == 0 {
+		t.Fatalf("JSON semantics = %+v", decoded)
 	}
 }
 

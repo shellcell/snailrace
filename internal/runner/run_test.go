@@ -52,10 +52,25 @@ func TestMeanResidentUsesObservedTimeWeights(t *testing.T) {
 }
 
 func TestUpdatePeaksTracksPhysicalFootprint(t *testing.T) {
-	peak := platform.Metrics{PhysicalFootprintBytes: 100}
-	updatePeaks(&peak, platform.Metrics{PhysicalFootprintBytes: 250})
-	updatePeaks(&peak, platform.Metrics{PhysicalFootprintBytes: 200})
+	peak := platform.Metrics{PhysicalFootprintBytes: 100, PhysicalFootprintValid: true}
+	updatePeaks(&peak, platform.Metrics{
+		PhysicalFootprintBytes: 250, PhysicalFootprintValid: true,
+	})
+	updatePeaks(&peak, platform.Metrics{
+		PhysicalFootprintBytes: 200, PhysicalFootprintValid: true,
+	})
 	if peak.PhysicalFootprintBytes != 250 {
 		t.Fatalf("peak physical footprint = %d, want 250", peak.PhysicalFootprintBytes)
+	}
+}
+
+func TestUpdatePeaksInvalidatesPartialPhysicalFootprint(t *testing.T) {
+	var peak platform.Metrics
+	updatePeaks(&peak, platform.Metrics{
+		PhysicalFootprintBytes: 100, PhysicalFootprintValid: true,
+	})
+	updatePeaks(&peak, platform.Metrics{PhysicalFootprintBytes: 200})
+	if peak.PhysicalFootprintValid {
+		t.Fatal("a run with an invalid physical-footprint sample should be unavailable")
 	}
 }

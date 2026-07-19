@@ -18,6 +18,11 @@ func writeCompactText(writer io.Writer, report model.Report) error {
 	terminal := writerIsTerminal(writer)
 	var body strings.Builder
 	body.WriteString("\n")
+	fmt.Fprintf(&body, "BALANCED DIMENSIONS  %s\n", includedDimensionsText(report))
+	for _, caveat := range reliabilityCaveats(report) {
+		fmt.Fprintf(&body, "RELIABILITY  %s\n", caveat)
+	}
+	body.WriteString("\n")
 	writeTextFailures(&body, report)
 	if len(report.Benchmarks) == 1 {
 		writeCompactSingle(&body, report, terminal)
@@ -80,7 +85,7 @@ func compactMetrics(report model.Report, ranking rankingData) []compactMetric {
 			stdDev: func(s model.Summary) float64 { return s.MeanResidentBytes.StdDev },
 		},
 		{
-			name: "PHYS", unit: formatBytes, available: report.Host.OS == "darwin",
+			name: "PHYS", unit: formatBytes, available: physicalFootprintAvailable(report),
 			value: func(r rankingRow) float64 {
 				return report.Benchmarks[r.benchmark].Summary.PhysicalFootprintStats().Mean
 			},

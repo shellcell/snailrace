@@ -17,6 +17,8 @@ const (
 type deltaResult struct {
 	percent          float64
 	percentAvailable bool
+	baselineMean     float64
+	candidateMean    float64
 	difference       model.Stats
 	status           string
 	class            string
@@ -36,14 +38,20 @@ func compareMetric(
 	row metricRow,
 	intervalSeconds float64,
 ) deltaResult {
-	baseMean := row.stats(baseline.Summary).Mean
-	candidateMean := row.stats(candidate.Summary).Mean
-	result := deltaResult{}
+	valid := func(model.Run) bool { return true }
+	if row.darwinOnly {
+		valid = func(run model.Run) bool { return run.PhysicalFootprintValid }
+	}
+	baseValues, candidateValues, differences := pairedValues(
+		baseline.Runs, candidate.Runs, row.run, valid,
+	)
+	baseMean := model.CalculateStats(baseValues).Mean
+	candidateMean := model.CalculateStats(candidateValues).Mean
+	result := deltaResult{baselineMean: baseMean, candidateMean: candidateMean}
 	if baseMean != 0 {
 		result.percent = (candidateMean/baseMean - 1) * 100
 		result.percentAvailable = true
 	}
-	differences := pairedDifferences(baseline.Runs, candidate.Runs, row.run)
 	result.difference = model.CalculateStats(differences)
 	result.status, result.class = comparisonStatus(result.difference, row.direction)
 	if row.sampled && !samplingReliable(baseline, candidate, intervalSeconds) {
@@ -81,22 +89,33 @@ func benchmarkSamplesReliable(benchmark model.Benchmark, intervalSeconds float64
 	return true
 }
 
-func pairedDifferences(
+func pairedValues(
 	baseline, candidate []model.Run,
 	pick func(model.Run) float64,
-) []float64 {
+	valid func(model.Run) bool,
+) ([]float64, []float64, []float64) {
 	baselineByIndex := make(map[int]float64, len(baseline))
 	for _, run := range baseline {
-		baselineByIndex[run.Index] = pick(run)
-	}
-	differences := make([]float64, 0, len(candidate))
-	for _, run := range candidate {
-		value, ok := baselineByIndex[run.Index]
-		if ok {
-			differences = append(differences, pick(run)-value)
+		if valid(run) {
+			baselineByIndex[run.Index] = pick(run)
 		}
 	}
-	return differences
+	baseValues := make([]float64, 0, len(candidate))
+	candidateValues := make([]float64, 0, len(candidate))
+	differences := make([]float64, 0, len(candidate))
+	for _, run := range candidate {
+		if !valid(run) {
+			continue
+		}
+		value, ok := baselineByIndex[run.Index]
+		if ok {
+			candidateValue := pick(run)
+			baseValues = append(baseValues, value)
+			candidateValues = append(candidateValues, candidateValue)
+			differences = append(differences, candidateValue-value)
+		}
+	}
+	return baseValues, candidateValues, differences
 }
 
 func comparisonStatus(stats model.Stats, direction metricDirection) (string, string) {

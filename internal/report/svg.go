@@ -46,9 +46,12 @@ func writeSVG(writer io.Writer, report model.Report) error {
 }
 
 func svgHeader(output *strings.Builder, report model.Report) int {
-	panelHeight, nextSection := 72, 230
+	caveats := reliabilityCaveats(report)
+	panelHeight := 96 + len(caveats)*22
+	nextSection := 254 + len(caveats)*22
 	if report.Config.Mode == "tui" {
-		panelHeight, nextSection = 96, 254
+		panelHeight += 24
+		nextSection += 24
 	}
 	fmt.Fprint(output, `<rect x="24" y="28" width="6" height="72" fill="#88c0d0"/>`)
 	fmt.Fprint(output, `<text id="report-title" x="48" y="65" class="h1">🐌 SNAILRACE CHARTS</text>`)
@@ -77,14 +80,25 @@ func svgHeader(output *strings.Builder, report model.Report) int {
 		html.EscapeString(report.Host.LoadBefore), report.Host.ProcessesBefore,
 		html.EscapeString(clip(report.Host.Kernel, 32)),
 	)
+	fmt.Fprintf(
+		output, `<text x="44" y="202" class="muted">balanced dimensions %s</text>`,
+		html.EscapeString(includedDimensionsText(report)),
+	)
+	for index, caveat := range caveats {
+		fmt.Fprintf(
+			output, `<text x="44" y="%d" class="uncertain">reliability %s</text>`,
+			227+index*22, html.EscapeString(caveat),
+		)
+	}
 	if report.Config.Mode == "tui" {
 		duration := "until exit"
 		if report.Config.DurationSeconds > 0 {
 			duration = formatDuration(report.Config.DurationSeconds)
 		}
 		fmt.Fprintf(
-			output, `<text x="820" y="202" class="muted">TUI %s · %dx%d</text>`,
-			duration, report.Config.TerminalWidth, report.Config.TerminalHeight,
+			output, `<text x="44" y="%d" class="muted">TUI %s · %dx%d</text>`,
+			227+len(caveats)*22, duration,
+			report.Config.TerminalWidth, report.Config.TerminalHeight,
 		)
 	}
 	return nextSection

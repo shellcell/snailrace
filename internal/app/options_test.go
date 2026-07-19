@@ -2,6 +2,7 @@ package app
 
 import (
 	"io"
+	"strings"
 	"testing"
 )
 
@@ -18,6 +19,16 @@ func TestParseDirectCommand(t *testing.T) {
 	}
 	if options.specs[0].Name != "sleep" {
 		t.Fatalf("name = %q, want sleep", options.specs[0].Name)
+	}
+}
+
+func TestHelpReturnsSuccess(t *testing.T) {
+	var output strings.Builder
+	if err := Run([]string{"-h"}, io.Discard, &output); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "Usage: snailrace") {
+		t.Fatal("help output is missing usage")
 	}
 }
 

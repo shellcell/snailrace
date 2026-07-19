@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/shellcell/snailrace/internal/model"
 )
@@ -22,15 +23,44 @@ func Benchmark(
 	if err := validateBenchmarkInputs(ctx, specs, config); err != nil {
 		return nil, err
 	}
+	specs = append([]Spec(nil), specs...)
+	for index := range specs {
+		specs[index].Args = append([]string(nil), specs[index].Args...)
+	}
 	benchmarks := make([]model.Benchmark, len(specs))
 	progress := newProgressTracker(options, specs, config)
 	defer progress.finish()
 	inspector := newToolInspector()
+	pinned := make([]*os.File, len(specs))
+	defer func() {
+		for _, file := range pinned {
+			if file != nil {
+				_ = file.Close()
+			}
+		}
+	}()
 	for index, spec := range specs {
 		benchmarks[index].Runs = make([]model.Run, 0, config.Runs)
-		tool, err := inspector.inspect(spec)
+		tool, err := inspector.inspect(ctx, spec)
 		if err != nil {
 			return nil, err
+		}
+		file, err := inspector.pin(ctx, &tool)
+		if err != nil {
+			return nil, fmt.Errorf("hash %q: %w", tool.Name, err)
+		}
+		pinned[index] = file
+		pinExecution := !executableIsScript(file)
+		if pinExecution {
+			specs[index].executable = file
+		}
+		if tool.ShellTarget && pinExecution {
+			if command, ok := pinShellExecutable(
+				spec.Shell, pinnedExecutablePath(file),
+			); ok {
+				specs[index].Shell = command
+				specs[index].shellTarget = true
+			}
 		}
 		benchmarks[index].Tool = tool
 		progress.setTool(index, tool)
@@ -109,8 +139,13 @@ func Benchmark(
 		return nil, ctx.Err()
 	}
 	for index := range benchmarks {
-		if err := inspector.addHash(&benchmarks[index].Tool); err != nil {
-			return nil, fmt.Errorf("hash %q: %w", benchmarks[index].Tool.Name, err)
+		if !interrupted {
+			if err := inspector.verify(
+				ctx, benchmarks[index].Tool, pinned[index],
+			); err != nil {
+				return nil, fmt.Errorf("verify %q: %w", benchmarks[index].Tool.Name, err)
+			}
+			benchmarks[index].Tool.ProvenanceVerified = true
 		}
 		benchmarks[index].Summary = model.Summarize(benchmarks[index].Runs)
 	}
@@ -118,4 +153,10 @@ func Benchmark(
 		return benchmarks, ErrInterrupted
 	}
 	return benchmarks, nil
+}
+
+func executableIsScript(file *os.File) bool {
+	var magic [2]byte
+	count, _ := file.ReadAt(magic[:], 0)
+	return count == len(magic) && magic == [2]byte{'#', '!'}
 }

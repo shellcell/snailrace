@@ -119,3 +119,20 @@ func available(row metricRow, operatingSystem string) bool {
 	return (operatingSystem != "darwin" || !row.unavailableDarwin) &&
 		(!row.darwinOnly || operatingSystem == "darwin")
 }
+
+func availableFor(
+	row metricRow, operatingSystem string, summaries ...model.Summary,
+) bool {
+	if !available(row, operatingSystem) {
+		return false
+	}
+	if !row.darwinOnly {
+		return true
+	}
+	for _, summary := range summaries {
+		if row.stats(summary).N == 0 {
+			return false
+		}
+	}
+	return true
+}

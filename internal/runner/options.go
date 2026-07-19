@@ -18,6 +18,8 @@ type Config struct {
 type Options struct {
 	ShowOutput   bool
 	Output       io.Writer
+	Input        io.Reader
+	TerminalOut  io.Writer
 	TUI          bool
 	Duration     time.Duration
 	Width        uint16

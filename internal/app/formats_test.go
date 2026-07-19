@@ -34,3 +34,15 @@ func TestDefaultFormatIsHTML(t *testing.T) {
 		t.Fatalf("output = %q, want current directory", options.output)
 	}
 }
+
+func TestEmptyOutputRequiresNoSave(t *testing.T) {
+	if _, err := parseOptions([]string{"-o", "", "--", "true"}, io.Discard); err == nil {
+		t.Fatal("empty output should require -no-save")
+	}
+	options, err := parseOptions(
+		[]string{"-no-save", "-o", "", "--", "true"}, io.Discard,
+	)
+	if err != nil || !options.noSave {
+		t.Fatalf("no-save options = %+v, error = %v", options, err)
+	}
+}

@@ -36,7 +36,9 @@ func writeMarkdownComparison(writer io.Writer, report model.Report) {
 			formatBytes(float64(candidate.Tool.DiskFootprintBytes)), staticDelta,
 		)
 		for _, row := range metricRows {
-			if !available(row, report.Host.OS) {
+			if !availableFor(
+				row, report.Host.OS, baseline.Summary, candidate.Summary,
+			) {
 				fmt.Fprintf(writer, "| %s | N/A | N/A | N/A | N/A |\n", row.name)
 				continue
 			}
@@ -45,8 +47,7 @@ func writeMarkdownComparison(writer io.Writer, report model.Report) {
 			)
 			fmt.Fprintf(
 				writer, "| %s | %s | %s | %s | %s |\n", row.name,
-				row.format(row.stats(baseline.Summary).Mean),
-				row.format(row.stats(candidate.Summary).Mean),
+				row.format(delta.baselineMean), row.format(delta.candidateMean),
 				formatDelta(delta, row), formatDeltaInterval(delta, row),
 			)
 		}

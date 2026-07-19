@@ -20,6 +20,7 @@ func WriteChartFiles(
 	report model.Report,
 	includeCommands bool,
 ) ([]ChartArtifact, error) {
+	report = safeDisplayReport(report)
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return nil, err
 	}
