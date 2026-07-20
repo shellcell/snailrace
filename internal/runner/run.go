@@ -35,7 +35,7 @@ func runOnce(
 		return model.Run{}, err
 	}
 	groupID := cmd.Process.Pid
-	monitor := startMonitor(groupID, interval, platform.SampleProcessGroup)
+	monitor := startMonitor(groupID, interval, platform.NewGroupSampler().Sample)
 
 	waitErr := cmd.Wait()
 	elapsed := time.Since(started)

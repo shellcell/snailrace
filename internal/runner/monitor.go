@@ -10,6 +10,8 @@ type processGroupSampler func(int) (platform.Metrics, bool)
 
 type sampleAggregate struct {
 	peak                  platform.Metrics
+	footprintMissing      bool
+	footprintInvalidated  bool
 	residentByteSamples   uint64
 	sampleCount           uint64
 	residentByteSeconds   float64
@@ -20,7 +22,6 @@ type sampleAggregate struct {
 
 func (aggregate *sampleAggregate) observe(current platform.Metrics, at time.Time) {
 	aggregate.addCoverage(at)
-	firstSample := aggregate.sampleCount == 0
 	aggregate.residentByteSamples += current.ResidentBytes
 	aggregate.sampleCount++
 	aggregate.peak.ResidentBytes = max(aggregate.peak.ResidentBytes, current.ResidentBytes)
@@ -30,20 +31,31 @@ func (aggregate *sampleAggregate) observe(current platform.Metrics, at time.Time
 	aggregate.peak.FileDescriptors = max(
 		aggregate.peak.FileDescriptors, current.FileDescriptors,
 	)
+	aggregate.observeFootprint(current)
+	aggregate.previousRSS, aggregate.previousAt = current.ResidentBytes, at
+}
+
+// The aggregate footprint is valid only when every sample carried a valid
+// footprint and nothing invalidated it; a sample that merely lacks a footprint
+// leaves the aggregate unusable without marking the run invalid.
+func (aggregate *sampleAggregate) observeFootprint(current platform.Metrics) {
 	if current.PhysicalFootprintValid {
 		aggregate.peak.PhysicalFootprintBytes = max(
 			aggregate.peak.PhysicalFootprintBytes, current.PhysicalFootprintBytes,
 		)
+	} else {
+		aggregate.footprintMissing = true
 	}
-	aggregate.peak.PhysicalFootprintInvalid =
-		aggregate.peak.PhysicalFootprintInvalid || current.PhysicalFootprintInvalid
-	aggregate.peak.PhysicalFootprintValid = current.PhysicalFootprintValid &&
-		!aggregate.peak.PhysicalFootprintInvalid &&
-		(firstSample || aggregate.peak.PhysicalFootprintValid)
-	aggregate.previousRSS, aggregate.previousAt = current.ResidentBytes, at
+	if current.PhysicalFootprintInvalid {
+		aggregate.footprintInvalidated = true
+	}
+	aggregate.peak.PhysicalFootprintValid = !aggregate.footprintMissing &&
+		!aggregate.footprintInvalidated
+	aggregate.peak.PhysicalFootprintInvalid = aggregate.footprintInvalidated
 }
 
 func (aggregate *sampleAggregate) invalidatePhysicalFootprint() {
+	aggregate.footprintInvalidated = true
 	aggregate.peak.PhysicalFootprintInvalid = true
 	aggregate.peak.PhysicalFootprintValid = false
 }

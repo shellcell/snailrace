@@ -6,49 +6,11 @@ import (
 )
 
 func Summarize(runs []Run) Summary {
-	values := func(pick func(Run) float64) []float64 {
-		result := make([]float64, len(runs))
-		for index, run := range runs {
-			result[index] = pick(run)
-		}
-		return result
-	}
-	physicalValues := make([]float64, 0, len(runs))
+	accumulator := NewSummaryAccumulator(len(runs))
 	for _, run := range runs {
-		if run.PhysicalFootprintValid {
-			physicalValues = append(physicalValues, run.PeakPhysicalFootprintBytes)
-		}
+		accumulator.Add(run)
 	}
-	var physicalStats *Stats
-	if len(physicalValues) > 0 {
-		value := stats(physicalValues)
-		physicalStats = &value
-	}
-	return Summary{
-		WallSeconds: stats(values(func(run Run) float64 { return run.WallSeconds })),
-		CPUTotalSeconds: stats(values(func(run Run) float64 {
-			return run.CPUUserSeconds + run.CPUSystemSeconds
-		})),
-		CPUUserSeconds:             stats(values(func(run Run) float64 { return run.CPUUserSeconds })),
-		CPUSystemSeconds:           stats(values(func(run Run) float64 { return run.CPUSystemSeconds })),
-		AverageCPUPercent:          stats(values(func(run Run) float64 { return run.AverageCPUPercent })),
-		PeakResidentBytes:          stats(values(func(run Run) float64 { return run.PeakResidentBytes })),
-		PeakPhysicalFootprintBytes: physicalStats,
-		OSMaxRSSBytes:              stats(values(func(run Run) float64 { return run.OSMaxRSSBytes })),
-		MeanResidentBytes:          stats(values(func(run Run) float64 { return run.MeanResidentBytes })),
-		PeakVirtualBytes:           stats(values(func(run Run) float64 { return run.PeakVirtualBytes })),
-		PeakProcesses:              stats(values(func(run Run) float64 { return run.PeakProcesses })),
-		PeakThreads:                stats(values(func(run Run) float64 { return run.PeakThreads })),
-		PeakFileDescriptors: stats(values(func(run Run) float64 {
-			return run.PeakFileDescriptors
-		})),
-		ValidSampleCount: stats(values(func(run Run) float64 {
-			return float64(run.SampleCount)
-		})),
-		SampleCoverageSeconds: stats(values(func(run Run) float64 {
-			return run.SampleCoverageSeconds
-		})),
-	}
+	return accumulator.Snapshot()
 }
 
 func CalculateStats(values []float64) Stats { return stats(values) }

@@ -13,6 +13,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/shellcell/snailrace/internal/runner"
+	"github.com/shellcell/snailrace/internal/style"
 )
 
 func progressRenderer(
@@ -147,12 +148,9 @@ func progressDisplayWidth(value string) int {
 				continue
 			}
 		}
-		r, size := utf8.DecodeRuneInString(value[index:])
+		character, size := utf8.DecodeRuneInString(value[index:])
 		index += size
-		width++
-		if r == '🐌' || r == '🏁' {
-			width++
-		}
+		width += style.RuneWidth(character)
 	}
 	return width
 }

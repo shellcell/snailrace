@@ -79,8 +79,9 @@ func copyInteractiveTerminalOutput(
 ) {
 	defer close(done)
 	buffer := make([]byte, 4096)
+	scratch := make([]unix.PollFd, 1)
 	for {
-		revents, ok := pollDescriptor(ctx, terminalFD, unix.POLLIN)
+		revents, ok := pollDescriptor(ctx, scratch, terminalFD, unix.POLLIN)
 		if !ok {
 			return
 		}
@@ -91,7 +92,7 @@ func copyInteractiveTerminalOutput(
 			continue
 		}
 		count, err := unix.Read(terminalFD, buffer)
-		if count > 0 && !writeDescriptor(ctx, outputFD, buffer[:count]) {
+		if count > 0 && !writeDescriptor(ctx, scratch, outputFD, buffer[:count]) {
 			return
 		}
 		if err != nil || count == 0 {
@@ -105,8 +106,9 @@ func copyTerminalInput(
 ) {
 	defer close(done)
 	buffer := make([]byte, 4096)
+	scratch := make([]unix.PollFd, 1)
 	for {
-		revents, ok := pollDescriptor(ctx, inputFD, unix.POLLIN)
+		revents, ok := pollDescriptor(ctx, scratch, inputFD, unix.POLLIN)
 		if !ok {
 			return
 		}
@@ -117,7 +119,7 @@ func copyTerminalInput(
 			continue
 		}
 		count, err := unix.Read(inputFD, buffer)
-		if count > 0 && !writeDescriptor(ctx, int(terminal.Fd()), buffer[:count]) {
+		if count > 0 && !writeDescriptor(ctx, scratch, int(terminal.Fd()), buffer[:count]) {
 			return
 		}
 		if err != nil || count == 0 {
@@ -126,13 +128,15 @@ func copyTerminalInput(
 	}
 }
 
-func pollDescriptor(ctx context.Context, fd int, events int16) (int16, bool) {
+func pollDescriptor(
+	ctx context.Context, scratch []unix.PollFd, fd int, events int16,
+) (int16, bool) {
 	for {
 		if ctx.Err() != nil {
 			return 0, false
 		}
-		poll := []unix.PollFd{{Fd: int32(fd), Events: events}}
-		ready, err := unix.Poll(poll, int((100 * time.Millisecond).Milliseconds()))
+		scratch[0] = unix.PollFd{Fd: int32(fd), Events: events}
+		ready, err := unix.Poll(scratch[:1], int((100 * time.Millisecond).Milliseconds()))
 		if err == unix.EINTR {
 			continue
 		}
@@ -140,14 +144,16 @@ func pollDescriptor(ctx context.Context, fd int, events int16) (int16, bool) {
 			return 0, false
 		}
 		if ready > 0 {
-			return poll[0].Revents, true
+			return scratch[0].Revents, true
 		}
 	}
 }
 
-func writeDescriptor(ctx context.Context, fd int, data []byte) bool {
+func writeDescriptor(
+	ctx context.Context, scratch []unix.PollFd, fd int, data []byte,
+) bool {
 	for len(data) > 0 {
-		revents, ok := pollDescriptor(ctx, fd, unix.POLLOUT)
+		revents, ok := pollDescriptor(ctx, scratch, fd, unix.POLLOUT)
 		if !ok || revents&(unix.POLLHUP|unix.POLLERR|unix.POLLNVAL) != 0 {
 			return false
 		}

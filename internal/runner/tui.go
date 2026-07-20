@@ -80,7 +80,7 @@ func runTUIOnce(
 	}
 
 	groupID := cmd.Process.Pid
-	monitor := startMonitor(groupID, interval, platform.SampleProcessGroup)
+	monitor := startMonitor(groupID, interval, platform.NewGroupSampler().Sample)
 	waitDone := make(chan error, 1)
 	go func() { waitDone <- cmd.Wait() }()
 

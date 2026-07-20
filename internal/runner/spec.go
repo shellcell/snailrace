@@ -12,6 +12,10 @@ type Spec struct {
 	Shell string
 }
 
+// preparedSpec executes through the inspected descriptor when executable is
+// set, so the bytes that were hashed are provably the bytes that run even if
+// the path is swapped underneath us. shellTarget means Shell was already
+// rewritten to invoke the descriptor as its leading command word.
 type preparedSpec struct {
 	Spec
 	executable  *os.File
@@ -37,6 +41,9 @@ func (spec preparedSpec) command(ctx context.Context) *exec.Cmd {
 			shell = path
 		}
 		command = exec.CommandContext(ctx, shell, "-c", spec.Shell)
+		// argv[0] keeps the conventional name so the measured process and
+		// anything it reports (ps, error messages) see the usual identity,
+		// not a descriptor path.
 		command.Args[0] = "/bin/sh"
 	} else {
 		if path == "" {

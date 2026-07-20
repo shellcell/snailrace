@@ -14,7 +14,26 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// GroupSampler owns the scratch buffers for one monitoring goroutine, so the
+// per-tick sampling loop does not generate garbage while a run is measured.
+// It is not safe for concurrent use.
+type GroupSampler struct {
+	statBuffer      []byte
+	directoryBuffer []byte
+}
+
+func NewGroupSampler() *GroupSampler {
+	return &GroupSampler{
+		statBuffer:      make([]byte, 4096),
+		directoryBuffer: make([]byte, 32*1024),
+	}
+}
+
 func SampleProcessGroup(rootPID int) (Metrics, bool) {
+	return NewGroupSampler().Sample(rootPID)
+}
+
+func (sampler *GroupSampler) Sample(rootPID int) (Metrics, bool) {
 	directory, err := unix.Open("/proc", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return Metrics{}, false
@@ -22,19 +41,17 @@ func SampleProcessGroup(rootPID int) (Metrics, bool) {
 	defer unix.Close(directory)
 	var total Metrics
 	rootFound := false
-	statBuffer := make([]byte, 4096)
-	directoryBuffer := make([]byte, 32*1024)
 	for {
-		count, readErr := unix.ReadDirent(directory, directoryBuffer)
+		count, readErr := unix.ReadDirent(directory, sampler.directoryBuffer)
 		if readErr != nil {
 			return Metrics{}, false
 		}
 		if count == 0 {
 			return total, rootFound
 		}
-		validDirents := scanProcDirents(directoryBuffer[:count], func(pid int) {
+		validDirents := scanProcDirents(sampler.directoryBuffer[:count], func(pid int) {
 			record, err := readProcessAt(
-				directory, pid, rootPID, statBuffer,
+				directory, pid, rootPID, sampler.statBuffer,
 			)
 			if err != nil || record.GroupID != rootPID {
 				return

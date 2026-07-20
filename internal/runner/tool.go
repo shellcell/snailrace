@@ -231,6 +231,9 @@ func shellBuiltin(name string) bool {
 	return builtins[name]
 }
 
+// pinShellExecutable swaps the leading command word for the pinned descriptor
+// path so /bin/sh execs the inspected bytes; it declines when the word carries
+// shell syntax that substitution could change the meaning of.
 func pinShellExecutable(command, executable string) (string, bool) {
 	trimmed := strings.TrimLeft(command, " \t\r\n")
 	if trimmed == "" {

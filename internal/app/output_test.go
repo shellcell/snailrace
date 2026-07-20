@@ -5,9 +5,11 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/shellcell/snailrace/internal/model"
 	reportpkg "github.com/shellcell/snailrace/internal/report"
@@ -214,6 +216,55 @@ func TestSavingSameReportUsesUniqueNames(t *testing.T) {
 	}
 	if len(entries) != saves {
 		t.Fatalf("saved entries = %d, want %d unique reports", len(entries), saves)
+	}
+}
+
+func TestReserveReportStemFailsInUnreadableDirectory(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("directory permissions are not enforced for root")
+	}
+	directory := t.TempDir()
+	if err := os.Chmod(directory, 0o333); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(directory, 0o755) })
+	if _, _, err := reserveReportStem(directory, "report"); err == nil {
+		t.Fatal("unreadable directory should fail instead of retrying forever")
+	}
+}
+
+func TestReserveReportStemReclaimsStaleLock(t *testing.T) {
+	directory := t.TempDir()
+	lockPath := filepath.Join(directory, ".report.lock")
+	if err := os.WriteFile(lockPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	leaked := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(lockPath, leaked, leaked); err != nil {
+		t.Fatal(err)
+	}
+	stem, release, err := reserveReportStem(directory, "report")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	if stem != "report" {
+		t.Fatalf("stem = %q, want the stale lock reclaimed for %q", stem, "report")
+	}
+}
+
+func TestReserveReportStemSkipsHeldLock(t *testing.T) {
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, ".report.lock"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stem, release, err := reserveReportStem(directory, "report")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	if stem != "report-2" {
+		t.Fatalf("stem = %q, want a fresh lock to skip to %q", stem, "report-2")
 	}
 }
 

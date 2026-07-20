@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/shellcell/snailrace/internal/report"
 )
@@ -98,46 +99,74 @@ func saveReportFormats(
 	return nil
 }
 
+const maxReportNameAttempts = 10000
+
 func reserveReportStem(
 	directory string,
 	base string,
 ) (string, func(), error) {
-	for suffix := 1; ; suffix++ {
+	for suffix := 1; suffix <= maxReportNameAttempts; suffix++ {
 		stem := base
 		if suffix > 1 {
 			stem = fmt.Sprintf("%s-%d", base, suffix)
 		}
-		lockPath := filepath.Join(directory, "."+stem+".lock")
-		lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-		if errors.Is(err, os.ErrExist) {
-			continue
-		}
+		release, reserved, err := tryReserveStem(directory, stem)
 		if err != nil {
 			return "", nil, err
 		}
-		if err := lock.Close(); err != nil {
-			os.Remove(lockPath)
-			return "", nil, err
+		if reserved {
+			return stem, release, nil
 		}
-		if reportStemExists(directory, stem) {
-			os.Remove(lockPath)
-			continue
-		}
-		return stem, func() { os.Remove(lockPath) }, nil
 	}
+	return "", nil, fmt.Errorf("no available report name for %q in %s", base, directory)
 }
 
-func reportStemExists(directory, stem string) bool {
+func tryReserveStem(directory, stem string) (func(), bool, error) {
+	lockPath := filepath.Join(directory, "."+stem+".lock")
+	for attempt := range 2 {
+		lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if errors.Is(err, os.ErrExist) {
+			// Reclaim a lock leaked by a crashed run, then retry this stem once.
+			if attempt == 0 && staleLockFile(lockPath) && os.Remove(lockPath) == nil {
+				continue
+			}
+			return nil, false, nil
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		if err := lock.Close(); err != nil {
+			os.Remove(lockPath)
+			return nil, false, err
+		}
+		exists, err := reportStemExists(directory, stem)
+		if err != nil || exists {
+			os.Remove(lockPath)
+			return nil, false, err
+		}
+		return func() { os.Remove(lockPath) }, true, nil
+	}
+	return nil, false, nil
+}
+
+// Locks are held only while a report is being written, so anything old enough
+// to predate the current run by an hour was leaked by a crashed process.
+func staleLockFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && time.Since(info.ModTime()) > time.Hour
+}
+
+func reportStemExists(directory, stem string) (bool, error) {
 	entries, err := os.ReadDir(directory)
 	if err != nil {
-		return true
+		return false, err
 	}
 	for _, entry := range entries {
 		if entry.Name() == stem || strings.HasPrefix(entry.Name(), stem+".") {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 func writeMarkdownFile(

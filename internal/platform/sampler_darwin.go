@@ -25,8 +25,21 @@ import (
 	"unsafe"
 )
 
+// GroupSampler owns the scratch buffers for one monitoring goroutine, so the
+// per-tick sampling loop does not generate garbage while a run is measured.
+// It is not safe for concurrent use.
+type GroupSampler struct {
+	pids []C.pid_t
+}
+
+func NewGroupSampler() *GroupSampler { return &GroupSampler{} }
+
 func SampleProcessGroup(rootPID int) (Metrics, bool) {
-	pids := processGroupPIDs(rootPID)
+	return NewGroupSampler().Sample(rootPID)
+}
+
+func (sampler *GroupSampler) Sample(rootPID int) (Metrics, bool) {
+	pids := sampler.processGroupPIDs(rootPID)
 	var total Metrics
 	foundRoot := false
 	physicalFootprintValid := true
@@ -61,15 +74,18 @@ func SampleProcessGroup(rootPID int) (Metrics, bool) {
 	return total, foundRoot
 }
 
-func processGroupPIDs(groupID int) []C.pid_t {
+func (sampler *GroupSampler) processGroupPIDs(groupID int) []C.pid_t {
 	bytes := C.proc_listpgrppids(C.pid_t(groupID), nil, 0)
 	if bytes <= 0 {
 		return nil
 	}
 	// Leave room for process churn, and retry if the result fills the buffer.
 	capacity := int(bytes) + 16
-	for attempts := 0; attempts < 3; attempts++ {
-		pids := make([]C.pid_t, capacity)
+	for range 3 {
+		if cap(sampler.pids) < capacity {
+			sampler.pids = make([]C.pid_t, capacity)
+		}
+		pids := sampler.pids[:capacity]
 		count := int(C.proc_listpgrppids(
 			C.pid_t(groupID), unsafe.Pointer(&pids[0]), C.int(len(pids))*C.sizeof_pid_t,
 		))

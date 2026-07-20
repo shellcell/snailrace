@@ -80,6 +80,28 @@ func TestBenchmarkContinuesAfterNonZeroExit(t *testing.T) {
 	}
 }
 
+func TestNativeExecutableRunsExitZero(t *testing.T) {
+	benchmarks, err := Benchmark(
+		context.Background(),
+		[]Spec{{Name: "direct", Args: []string{"true"}}, {Name: "shell", Shell: "true"}},
+		Config{Runs: 1, Interval: time.Millisecond}, Options{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, benchmark := range benchmarks {
+		if benchmark.Runs[0].ExitCode != 0 {
+			t.Fatalf(
+				"native %s exit code = %d, want 0",
+				benchmark.Tool.Name, benchmark.Runs[0].ExitCode,
+			)
+		}
+		if !benchmark.Tool.ProvenanceVerified {
+			t.Fatalf("native %s provenance not verified", benchmark.Tool.Name)
+		}
+	}
+}
+
 func TestShellBenchmarksInspectDistinctTargetExecutables(t *testing.T) {
 	benchmarks, err := Benchmark(
 		context.Background(),
