@@ -49,8 +49,20 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: '12.0'
         run: go build -trimpath -o /tmp/snailrace ./cmd/snailrace
 
-  release:
+  create-release:
     needs: validate-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Create GitHub release once
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+
+  release:
+    needs: create-release
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -93,8 +105,12 @@ jobs:
           echo "ARCHIVE=$name.tar.gz" >> "$GITHUB_ENV"
       - name: Build distro packages (.deb/.rpm/.apk)
         if: matrix.goos == 'linux' && (matrix.goarch == 'amd64' || matrix.goarch == 'arm64')
+        env:
+          # nfpm's go directive is newer than go.mod's toolchain; let go
+          # download what nfpm needs instead of failing on GOTOOLCHAIN=local.
+          GOTOOLCHAIN: auto
         run: |
-          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
           sudo apt-get update && sudo apt-get install -y gettext-base
           export PKG_VERSION="${GITHUB_REF_NAME#v}" PKG_ARCH="${{ matrix.goarch }}" PKG_BIN=./snailrace
           envsubst < nfpm.yaml > /tmp/nfpm.yaml
@@ -103,12 +119,14 @@ jobs:
             nfpm package -f /tmp/nfpm.yaml -p "$fmt" -t pkgs
           done
       - name: Upload to release
-        uses: softprops/action-gh-release@v3
-        with:
-          files: |
-            ${{ env.ARCHIVE }}
-            ${{ env.ARCHIVE }}.sha256
-            pkgs/*
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" \
+            "$ARCHIVE" "$ARCHIVE.sha256" --clobber
+          if compgen -G 'pkgs/*' > /dev/null; then
+            gh release upload "$GITHUB_REF_NAME" pkgs/* --clobber
+          fi
 
   bump-tap:
     needs: release

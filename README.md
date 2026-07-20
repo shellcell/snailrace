@@ -24,6 +24,22 @@ sudo dnf install snailrace   # Fedora / RHEL
 sudo apk add snailrace       # Alpine
 ```
 
+### Arch (AUR)
+
+With an AUR helper (e.g. `paru` or `yay`):
+
+```sh
+paru -S snailrace       # builds from source
+paru -S snailrace-bin   # prebuilt binary
+```
+
+Or manually:
+
+```sh
+git clone https://aur.archlinux.org/snailrace.git   # or snailrace-bin.git
+cd snailrace && makepkg -si
+```
+
 ### Go
 
 ```sh
