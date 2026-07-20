@@ -31,7 +31,7 @@ func TestFixedDurationTUIStopsProcessGroup(t *testing.T) {
 
 func TestFixedDurationTUIRejectsEarlyExit(t *testing.T) {
 	_, err := runTUIOnce(
-		context.Background(), Spec{Name: "true", Args: []string{"/bin/true"}},
+		context.Background(), Spec{Name: "true", Args: []string{"true"}},
 		time.Millisecond, Options{TUI: true, Duration: 50 * time.Millisecond},
 	)
 	if err == nil {

@@ -2,8 +2,11 @@ package runner
 
 import "os"
 
-func pinnedExecutablePath(*os.File) string { return "/dev/fd/9" }
+// macOS cannot execve /dev/fd nodes and has no fexecve, so execution cannot
+// be pinned to the inspected descriptor; provenance relies on the before and
+// after hash verification instead.
+const pinExecutionSupported = false
 
-func pinnedExtraFiles(file *os.File) []*os.File {
-	return []*os.File{nil, nil, nil, nil, nil, nil, file}
-}
+func pinnedExecutablePath(*os.File) string { return "" }
+
+func pinnedExtraFiles(*os.File) []*os.File { return nil }

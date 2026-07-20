@@ -5,6 +5,8 @@ import (
 	"os"
 )
 
+const pinExecutionSupported = true
+
 func pinnedExecutablePath(file *os.File) string {
 	return fmt.Sprintf("/proc/%d/fd/%d", os.Getpid(), file.Fd())
 }

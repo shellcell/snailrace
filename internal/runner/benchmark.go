@@ -54,7 +54,7 @@ func Benchmark(
 			return nil, fmt.Errorf("hash %q: %w", tool.Name, err)
 		}
 		pinned[index] = file
-		pinExecution := !executableIsScript(file)
+		pinExecution := pinExecutionSupported && !executableIsScript(file)
 		if pinExecution {
 			prepared[index].executable = file
 		}

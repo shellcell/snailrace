@@ -60,7 +60,7 @@ func TestBenchmarkContinuesAfterNonZeroExit(t *testing.T) {
 		context.Background(),
 		[]Spec{
 			{Name: "exit", Shell: "exit 7"},
-			{Name: "true", Args: []string{"/bin/true"}},
+			{Name: "true", Args: []string{"true"}},
 		},
 		Config{Runs: 3, Warmups: 1, Interval: time.Millisecond},
 		Options{},
@@ -130,7 +130,7 @@ func TestScriptExecutionPreservesOriginalPath(t *testing.T) {
 }
 
 func TestBenchmarkRejectsInvalidInputs(t *testing.T) {
-	validSpec := Spec{Name: "true", Args: []string{"/bin/true"}}
+	validSpec := Spec{Name: "true", Args: []string{"true"}}
 	validConfig := Config{Runs: 1, Interval: time.Millisecond}
 	tests := []struct {
 		name   string

@@ -151,7 +151,7 @@ func TestRunSavesDefaultHTMLInCurrentDirectory(t *testing.T) {
 	t.Chdir(directory)
 	var stdout, stderr bytes.Buffer
 	if err := Run(
-		[]string{"-n", "1", "-warmups", "0", "--", "/bin/true"},
+		[]string{"-n", "1", "-warmups", "0", "--", "true"},
 		&stdout, &stderr,
 	); err != nil {
 		t.Fatal(err)
@@ -172,7 +172,7 @@ func TestRunNoSaveLeavesCurrentDirectoryEmpty(t *testing.T) {
 	directory := t.TempDir()
 	t.Chdir(directory)
 	if err := Run(
-		[]string{"-no-save", "-n", "1", "-warmups", "0", "--", "/bin/true"},
+		[]string{"-no-save", "-n", "1", "-warmups", "0", "--", "true"},
 		io.Discard, io.Discard,
 	); err != nil {
 		t.Fatal(err)

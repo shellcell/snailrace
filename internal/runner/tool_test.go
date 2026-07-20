@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -14,7 +15,7 @@ func TestInspectionHonorsCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := newToolInspector().inspect(
-		ctx, Spec{Name: "true", Args: []string{"/bin/true"}},
+		ctx, Spec{Name: "true", Args: []string{"true"}},
 	); err == nil {
 		t.Fatal("cancelled inspection should fail")
 	}
@@ -30,7 +31,7 @@ func TestToolInspectorUsesInjectedDependencyDiscovery(t *testing.T) {
 	})
 	for _, name := range []string{"first", "second"} {
 		if _, err := inspector.inspect(
-			context.Background(), Spec{Name: name, Args: []string{"/bin/true"}},
+			context.Background(), Spec{Name: name, Args: []string{"true"}},
 		); err != nil {
 			t.Fatal(err)
 		}
@@ -45,7 +46,7 @@ func TestToolInspectorUsesInjectedDependencyDiscovery(t *testing.T) {
 		return nil, expected
 	})
 	if _, err := inspector.inspect(
-		context.Background(), Spec{Name: "tool", Args: []string{"/bin/true"}},
+		context.Background(), Spec{Name: "tool", Args: []string{"true"}},
 	); !errors.Is(err, expected) {
 		t.Fatalf("dependency error = %v, want %v", err, expected)
 	}
@@ -86,7 +87,11 @@ func TestPinShellExecutablePreservesArguments(t *testing.T) {
 
 func TestToolVerificationDetectsExecutableReplacement(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "tool")
-	data, err := os.ReadFile("/bin/true")
+	source, err := exec.LookPath("true")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(source)
 	if err != nil {
 		t.Fatal(err)
 	}

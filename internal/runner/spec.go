@@ -33,7 +33,7 @@ func (spec preparedSpec) command(ctx context.Context) *exec.Cmd {
 	var command *exec.Cmd
 	if spec.Shell != "" {
 		shell := "/bin/sh"
-		if spec.executable != nil && !spec.shellTarget {
+		if path != "" && !spec.shellTarget {
 			shell = path
 		}
 		command = exec.CommandContext(ctx, shell, "-c", spec.Shell)
