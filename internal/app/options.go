@@ -31,6 +31,7 @@ type options struct {
 	index         []string
 	verbose       bool
 	showOutput    bool
+	noSave        bool
 	version       bool
 	tui           bool
 	width, height uint16
@@ -80,8 +81,9 @@ func parseOptions(arguments []string, stderr io.Writer) (options, error) {
 		"saved format; repeat or comma-separate: html, svg, markdown, json, text",
 	)
 	flags.Var(&formats, "f", "saved format (shorthand)")
-	flags.StringVar(&result.output, "output", "", "directory for a saved report")
-	flags.StringVar(&result.output, "o", "", "directory for a saved report (shorthand)")
+	flags.StringVar(&result.output, "output", ".", "report directory; default current directory")
+	flags.StringVar(&result.output, "o", ".", "report directory (shorthand)")
+	flags.BoolVar(&result.noSave, "no-save", false, "do not save report files")
 	flags.BoolVar(&result.verbose, "verbose", false, "print full statistical tables to stdout")
 	flags.BoolVar(&result.showOutput, "show-output", false, "show command output")
 	// TUI.
@@ -150,7 +152,8 @@ func printUsage(stderr io.Writer) {
 		}},
 		{"Output", []string{
 			"-f, -format list      saved format: html, svg, markdown, json, text",
-			"-o, -output string    directory for a saved report",
+			"-o, -output string    report directory; default current directory",
+			"-no-save              do not save report files",
 			"-verbose              print full statistical tables to stdout",
 			"-show-output          forward command output to stderr",
 		}},

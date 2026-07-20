@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"strings"
 	"text/tabwriter"
 
 	"golang.org/x/term"
@@ -12,14 +11,15 @@ import (
 	"github.com/shellcell/snailrace/internal/model"
 )
 
-func writeText(writer io.Writer, report model.Report) error {
-	if !report.Verbose {
-		return writeCompactText(writer, report)
+func writeText(writer io.Writer, renderer *Renderer) error {
+	if !renderer.displayReport.Verbose {
+		return writeCompactText(writer, renderer)
 	}
-	return writeVerboseText(writer, report)
+	return writeVerboseText(writer, renderer)
 }
 
-func writeVerboseText(writer io.Writer, report model.Report) error {
+func writeVerboseText(writer io.Writer, renderer *Renderer) error {
+	report := renderer.displayReport
 	var output bytes.Buffer
 	w := tabwriter.NewWriter(&output, 0, 4, 2, ' ', 0)
 	fmt.Fprintf(w, "Snailrace report\t%s\n", report.MeasuredAt.Format(
@@ -39,7 +39,11 @@ func writeVerboseText(writer io.Writer, report model.Report) error {
 		report.Config.Mode, report.Config.Runs, report.Config.Warmups,
 		formatNumber(report.Config.IntervalMS),
 	)
-	if report.Config.Mode == "tui" {
+	fmt.Fprintf(w, "Included dimensions\t%s\n", renderer.dimensionText)
+	for _, caveat := range renderer.caveats {
+		fmt.Fprintf(w, "Reliability\t%s\n", caveat)
+	}
+	if report.Config.IsTUI() {
 		duration := "until exit"
 		if report.Config.DurationSeconds > 0 {
 			duration = formatDuration(report.Config.DurationSeconds)
@@ -58,12 +62,13 @@ func writeVerboseText(writer io.Writer, report model.Report) error {
 	}
 	fmt.Fprintln(w)
 	writeTextCommandLegend(w, report)
+	writeTextFailures(w, report)
 	if len(report.Benchmarks) > 1 {
-		writeTextRanking(w, report)
+		writeTextRankingWith(w, report, renderer.ranking)
 	}
 	if len(report.Benchmarks) > 1 {
 		fmt.Fprintln(w, "Detailed baseline deltas\t")
-		writeTextComparison(w, report)
+		writeTextComparison(w, renderer)
 	}
 	fmt.Fprintln(w, "Statistical detail\t")
 	for index, benchmark := range report.Benchmarks {
@@ -98,7 +103,7 @@ func writeTextBenchmark(
 		label += " [BASELINE]"
 	}
 	fmt.Fprintf(w, "%s\t\n", label)
-	commandLines := wrapText(strings.Join(benchmark.Tool.Command, " "), 100)
+	commandLines := wrapText(fullCommand(benchmark), 100)
 	for index, line := range commandLines {
 		field := ""
 		if index == 0 {
@@ -119,12 +124,12 @@ func writeTextBenchmark(
 		formatCount(benchmark.Summary.ValidSampleCount.Mean),
 		formatDuration(benchmark.Summary.SampleCoverageSeconds.Mean),
 	)
-	if !benchmarkSamplesReliable(benchmark, intervalSeconds) {
+	if !model.SamplingReliable(benchmark, intervalSeconds) {
 		fmt.Fprintln(w, "Sampling quality\tLIMITED: fewer than two valid samples or intervals")
 	}
 	fmt.Fprintln(w, "Metric\tMean ± σ\t95% CI mean\tMedian\tP95\tRange")
-	for _, row := range metricRows {
-		if !available(row, operatingSystem) {
+	for _, row := range metricCatalog {
+		if !availableFor(row, operatingSystem, benchmark.Summary) {
 			fmt.Fprintf(w, "%s\tN/A\tN/A\tN/A\tN/A\tN/A\n", row.name)
 			continue
 		}

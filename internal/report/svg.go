@@ -5,8 +5,6 @@ import (
 	"html"
 	"io"
 	"strings"
-
-	"github.com/shellcell/snailrace/internal/model"
 )
 
 const svgReportWidth = 1500
@@ -21,11 +19,18 @@ const svgReportStyle = `<style>` +
 	`.neutral{fill:#81a1c1}.rule{stroke:#4c566a}.panel{fill:#3b4252}` +
 	`</style>`
 
-func writeSVG(writer io.Writer, report model.Report) error {
+func writeSVG(writer io.Writer, renderer *Renderer) error {
+	report := renderer.displayReport
+	checked := newErrorWriter(writer)
+	writer = checked
 	var content strings.Builder
-	y := svgHeader(&content, report)
+	y := svgHeader(&content, renderer)
 	y = svgCommandLegend(&content, report, y)
-	y = svgCharts(&content, reportCharts(report), y)
+	charts := renderer.reportCharts()
+	if failures := failureChart(report); failures.height > 0 {
+		charts = append([]svgChart{failures}, charts...)
+	}
+	y = svgCharts(&content, charts, y)
 	height := y + 36
 	fmt.Fprintf(
 		writer,
@@ -36,13 +41,17 @@ func writeSVG(writer io.Writer, report model.Report) error {
 			`<rect width="100%%" height="100%%" fill="#2e3440"/>%s%s</svg>`,
 		svgReportWidth, height, svgReportStyle, content.String(),
 	)
-	return nil
+	return checked.Err()
 }
 
-func svgHeader(output *strings.Builder, report model.Report) int {
-	panelHeight, nextSection := 72, 230
-	if report.Config.Mode == "tui" {
-		panelHeight, nextSection = 96, 254
+func svgHeader(output *strings.Builder, renderer *Renderer) int {
+	report := renderer.displayReport
+	caveats := renderer.caveats
+	panelHeight := 96 + len(caveats)*22
+	nextSection := 254 + len(caveats)*22
+	if report.Config.IsTUI() {
+		panelHeight += 24
+		nextSection += 24
 	}
 	fmt.Fprint(output, `<rect x="24" y="28" width="6" height="72" fill="#88c0d0"/>`)
 	fmt.Fprint(output, `<text id="report-title" x="48" y="65" class="h1">🐌 SNAILRACE CHARTS</text>`)
@@ -71,14 +80,25 @@ func svgHeader(output *strings.Builder, report model.Report) int {
 		html.EscapeString(report.Host.LoadBefore), report.Host.ProcessesBefore,
 		html.EscapeString(clip(report.Host.Kernel, 32)),
 	)
-	if report.Config.Mode == "tui" {
+	fmt.Fprintf(
+		output, `<text x="44" y="202" class="muted">balanced dimensions %s</text>`,
+		html.EscapeString(renderer.dimensionText),
+	)
+	for index, caveat := range caveats {
+		fmt.Fprintf(
+			output, `<text x="44" y="%d" class="uncertain">reliability %s</text>`,
+			227+index*22, html.EscapeString(caveat),
+		)
+	}
+	if report.Config.IsTUI() {
 		duration := "until exit"
 		if report.Config.DurationSeconds > 0 {
 			duration = formatDuration(report.Config.DurationSeconds)
 		}
 		fmt.Fprintf(
-			output, `<text x="820" y="202" class="muted">TUI %s · %dx%d</text>`,
-			duration, report.Config.TerminalWidth, report.Config.TerminalHeight,
+			output, `<text x="44" y="%d" class="muted">TUI %s · %dx%d</text>`,
+			227+len(caveats)*22, duration,
+			report.Config.TerminalWidth, report.Config.TerminalHeight,
 		)
 	}
 	return nextSection
@@ -93,11 +113,11 @@ func svgCharts(output *strings.Builder, charts []svgChart, y int) int {
 	left, right := balanceCharts(charts)
 	leftY, rightY := y, y
 	for _, chart := range left {
-		output.WriteString(chart.embedded(24, leftY))
+		chart.writeEmbedded(output, 24, leftY)
 		leftY += chart.height + 16
 	}
 	for _, chart := range right {
-		output.WriteString(chart.embedded(756, rightY))
+		chart.writeEmbedded(output, 756, rightY)
 		rightY += chart.height + 16
 	}
 	if rightY > leftY {

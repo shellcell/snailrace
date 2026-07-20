@@ -2,6 +2,7 @@ package report
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -18,7 +19,7 @@ func TestFixedTUIComparisonEmphasizesResources(t *testing.T) {
 		},
 	}
 	var output bytes.Buffer
-	if err := writeText(&output, input); err != nil {
+	if err := writeText(&output, NewRenderer(input)); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(output.String(), "Average CPU") {
@@ -39,7 +40,7 @@ func TestCompactReportShowsBarsAndOmitsDetail(t *testing.T) {
 		Notes: []string{"a methodology note"},
 	}
 	var output bytes.Buffer
-	if err := writeText(&output, report); err != nil {
+	if err := writeText(&output, NewRenderer(report)); err != nil {
 		t.Fatal(err)
 	}
 	text := output.String()
@@ -66,7 +67,7 @@ func TestVerboseReportKeepsStatisticalDetail(t *testing.T) {
 		Notes: []string{"a methodology note"},
 	}
 	var output bytes.Buffer
-	if err := writeText(&output, report); err != nil {
+	if err := writeText(&output, NewRenderer(report)); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(output.String(), "Statistical detail") {
@@ -80,7 +81,7 @@ func TestCompactSingleToolListsKeyMetrics(t *testing.T) {
 		Benchmarks: []model.Benchmark{rankingBenchmark("solo", 1, 1, 100, 200, 1000)},
 	}
 	var output bytes.Buffer
-	if err := writeText(&output, report); err != nil {
+	if err := writeText(&output, NewRenderer(report)); err != nil {
 		t.Fatal(err)
 	}
 	text := output.String()
@@ -104,16 +105,16 @@ func samplingLimitedRAMReport() model.Report {
 func TestSamplingLimitedRAMIsShownButExcludedFromIndex(t *testing.T) {
 	report := samplingLimitedRAMReport()
 	ranking := calculateRanking(report)
-	if ranking.ramAvailable || !ranking.ramPresent {
+	if ranking.RAMAvailable || !ranking.RAMPresent {
 		t.Fatalf("want RAM present but sampling-limited, got present=%v available=%v",
-			ranking.ramPresent, ranking.ramAvailable)
+			ranking.RAMPresent, ranking.RAMAvailable)
 	}
 	if strings.Contains(balancedIndexCategories(ranking), "RAM") {
 		t.Fatal("sampling-limited RAM must stay out of the balanced index")
 	}
 	// Compact stdout shows the RAM bars with a remark.
 	var compact bytes.Buffer
-	if err := writeText(&compact, report); err != nil {
+	if err := writeText(&compact, NewRenderer(report)); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(compact.String(), "RAM") ||
@@ -122,12 +123,12 @@ func TestSamplingLimitedRAMIsShownButExcludedFromIndex(t *testing.T) {
 	}
 	// HTML ranking table and the RAM chart show it with a remark, not N/A.
 	var htmlRanking bytes.Buffer
-	writeHTMLRanking(&htmlRanking, report)
+	writeHTMLRanking(&htmlRanking, report, calculateRanking(report))
 	if !strings.Contains(htmlRanking.String(), "sampling-limited") {
 		t.Fatal("HTML ranking should mark RAM sampling-limited instead of N/A")
 	}
 	foundRAMChart := false
-	for _, chart := range rankingCharts(report) {
+	for _, chart := range rankingCharts(report, calculateRanking(report)) {
 		if chart.title == "RAM AGGREGATE" {
 			foundRAMChart = true
 			if !strings.Contains(chart.description, "sampling-limited") {
@@ -137,6 +138,43 @@ func TestSamplingLimitedRAMIsShownButExcludedFromIndex(t *testing.T) {
 	}
 	if !foundRAMChart {
 		t.Fatal("RAM aggregate chart should still render when sampling-limited")
+	}
+}
+
+func TestAllFormatsExposeActualDimensionsAndReliability(t *testing.T) {
+	report := samplingLimitedRAMReport()
+	for _, format := range []string{"text", "markdown", "html", "svg"} {
+		var output bytes.Buffer
+		if err := NewRenderer(report).Write(&output, format); err != nil {
+			t.Fatalf("%s: %v", format, err)
+		}
+		text := strings.ToLower(output.String())
+		if !strings.Contains(text, "time, cpu") {
+			t.Fatalf("%s omits actual included dimensions", format)
+		}
+		if !strings.Contains(text, "reliability") {
+			t.Fatalf("%s omits reliability caveat", format)
+		}
+		if !strings.Contains(text, "first:") || !strings.Contains(text, "second:") {
+			t.Fatalf("%s omits a per-tool reliability caveat", format)
+		}
+	}
+	var output bytes.Buffer
+	if err := NewRenderer(report).Write(&output, "json"); err != nil {
+		t.Fatal(err)
+	}
+	var decoded struct {
+		Ranking struct {
+			Included []string `json:"included_dimensions"`
+		} `json:"ranking"`
+		Reliability []string `json:"reliability_caveats"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(decoded.Ranking.Included, ",") != "time,cpu" ||
+		len(decoded.Reliability) == 0 {
+		t.Fatalf("JSON semantics = %+v", decoded)
 	}
 }
 

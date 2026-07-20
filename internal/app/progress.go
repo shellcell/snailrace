@@ -13,6 +13,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/shellcell/snailrace/internal/runner"
+	"github.com/shellcell/snailrace/internal/style"
 )
 
 func progressRenderer(
@@ -23,7 +24,7 @@ func progressRenderer(
 		return nil
 	}
 	var mutex sync.Mutex
-	renderedLines := 0
+	var renderedLines []string
 	cursorHidden := false
 	return func(event runner.ProgressEvent) {
 		mutex.Lock()
@@ -32,20 +33,20 @@ func progressRenderer(
 			if cursorHidden {
 				fmt.Fprint(writer, "\x1b[?25h\r\n")
 			}
-			renderedLines = 0
+			renderedLines = nil
 			return
 		}
 		if !cursorHidden {
 			fmt.Fprint(writer, "\x1b[?25l")
 			cursorHidden = true
 		}
-		clearProgress(writer, renderedLines)
 		width, _, _ := term.GetSize(int(file.Fd()))
+		clearProgress(writer, progressRenderedRows(renderedLines, width))
 		lines := append(
 			[]string{progressStatus(event, nameWidth)}, progressRaceLines(event, width)...,
 		)
 		fmt.Fprint(writer, strings.Join(lines, "\n"))
-		renderedLines = len(lines)
+		renderedLines = lines
 	}
 }
 
@@ -119,6 +120,51 @@ func clearProgress(writer io.Writer, lines int) {
 	for line := 1; line < lines; line++ {
 		fmt.Fprint(writer, "\x1b[1A\r\x1b[2K")
 	}
+}
+
+func progressRenderedRows(lines []string, terminalWidth int) int {
+	if terminalWidth <= 0 {
+		return len(lines)
+	}
+	rows := 0
+	for _, line := range lines {
+		width := progressDisplayWidth(line)
+		lineRows := (width + terminalWidth - 1) / terminalWidth
+		if lineRows == 0 {
+			lineRows = 1
+		}
+		rows += lineRows
+	}
+	return rows
+}
+
+func progressDisplayWidth(value string) int {
+	width := 0
+	for index := 0; index < len(value); {
+		if value[index] == '\x1b' {
+			next := progressANSIEscapeEnd(value[index:])
+			if next > 0 {
+				index += next
+				continue
+			}
+		}
+		character, size := utf8.DecodeRuneInString(value[index:])
+		index += size
+		width += style.RuneWidth(character)
+	}
+	return width
+}
+
+func progressANSIEscapeEnd(value string) int {
+	if len(value) < 2 || value[0] != '\x1b' || value[1] != '[' {
+		return 0
+	}
+	for index := 2; index < len(value); index++ {
+		if value[index] >= '@' && value[index] <= '~' {
+			return index + 1
+		}
+	}
+	return 0
 }
 
 func progressDuration(seconds float64) string {

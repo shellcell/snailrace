@@ -2,6 +2,7 @@ package app
 
 import (
 	"io"
+	"strings"
 	"testing"
 )
 
@@ -21,6 +22,16 @@ func TestParseDirectCommand(t *testing.T) {
 	}
 }
 
+func TestHelpReturnsSuccess(t *testing.T) {
+	var output strings.Builder
+	if err := Run([]string{"-h"}, io.Discard, &output); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "Usage: snailrace") {
+		t.Fatal("help output is missing usage")
+	}
+}
+
 func TestRejectsLabelCountMismatch(t *testing.T) {
 	_, err := parseOptions(
 		[]string{"-label", "x", "-c", "true", "-c", "false"},
@@ -28,6 +39,25 @@ func TestRejectsLabelCountMismatch(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatal("expected an error")
+	}
+}
+
+func TestRejectsEmptyAndDuplicateLabels(t *testing.T) {
+	for _, arguments := range [][]string{
+		{"-label", " ", "--", "true"},
+		{"-label", "same", "-label", "same", "-c", "true", "-c", "false"},
+	} {
+		if _, err := parseOptions(arguments, io.Discard); err == nil {
+			t.Fatalf("arguments %q should reject ambiguous labels", arguments)
+		}
+	}
+}
+
+func TestRejectsEmptyShellCommand(t *testing.T) {
+	for _, command := range []string{"", " \t\n"} {
+		if _, err := parseOptions([]string{"-c", command}, io.Discard); err == nil {
+			t.Fatalf("command %q should be rejected", command)
+		}
 	}
 }
 

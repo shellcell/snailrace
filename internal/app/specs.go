@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/shellcell/snailrace/internal/runner"
+	"github.com/shellcell/snailrace/internal/style"
 )
 
 func makeSpecs(commands, arguments []string, labels []string) []runner.Spec {
@@ -14,6 +15,7 @@ func makeSpecs(commands, arguments []string, labels []string) []runner.Spec {
 		if len(labels) > 0 {
 			name = labels[0]
 		}
+		name = style.SafeText(name)
 		return []runner.Spec{{Name: name, Args: arguments}}
 	}
 	defaultLabels := make([]string, len(commands))
@@ -32,6 +34,7 @@ func makeSpecs(commands, arguments []string, labels []string) []runner.Spec {
 			seen[label]++
 			label += " #" + fmt.Sprint(seen[label])
 		}
+		label = style.SafeText(label)
 		result = append(result, runner.Spec{Name: label, Shell: command})
 	}
 	return result

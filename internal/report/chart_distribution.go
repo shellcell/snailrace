@@ -10,14 +10,24 @@ import (
 )
 
 func absoluteDistributionChart(report model.Report, metric chartMetric) svgChart {
-	if !available(metricRows[metric.row], report.Host.OS) {
-		return unavailableChart("RUN DISTRIBUTION · "+metric.name, report.Host.OS)
+	if !available(metric, report.Host.OS) {
+		return unavailableChart("RUN DISTRIBUTION · "+metric.chartName, report.Host.OS)
+	}
+	for _, benchmark := range report.Benchmarks {
+		if !availableFor(metric, report.Host.OS, benchmark.Summary) {
+			return unavailableChart("RUN DISTRIBUTION · "+metric.chartName, "metric unavailable")
+		}
 	}
 	minimum, maximum := 0.0, 0.0
 	for _, benchmark := range report.Benchmarks {
-		stats := metric.stats(benchmark)
+		stats := metric.stats(benchmark.Summary)
+		if stats.N == 0 || !finiteNumber(stats.Min) ||
+			!finiteNumber(stats.Max) || !finiteNumber(stats.Mean) {
+			return svgChart{}
+		}
 		maximum = math.Max(maximum, stats.Max)
-		if stats.CI95Valid {
+		if stats.CI95Valid && finiteNumber(stats.CI95Low) &&
+			finiteNumber(stats.CI95High) {
 			minimum = math.Min(minimum, stats.CI95Low)
 			maximum = math.Max(maximum, stats.CI95High)
 		}
@@ -31,13 +41,18 @@ func absoluteDistributionChart(report model.Report, metric chartMetric) svgChart
 		return left + (value-minimum)/(maximum-minimum)*plotWidth
 	}
 	var body strings.Builder
+	points := 0
+	for _, benchmark := range report.Benchmarks {
+		points += len(benchmark.Runs)
+	}
+	body.Grow(1024 + len(report.Benchmarks)*384 + points*96)
 	body.WriteString(svgChartStyle)
 	fmt.Fprintf(
 		&body,
 		`<rect width="100%%" height="100%%" rx="8" fill="#3b4252"/>`+
 			`<text x="16" y="24" class="title">RUN DISTRIBUTION · %s</text>`+
 			`<text x="16" y="43" class="subtitle">dots = runs · diamond = mean · whisker = mean 95%% CI</text>`,
-		html.EscapeString(metric.name),
+		html.EscapeString(metric.chartName),
 	)
 	fmt.Fprintf(
 		&body,
@@ -45,10 +60,9 @@ func absoluteDistributionChart(report model.Report, metric chartMetric) svgChart
 			`<text x="%d" y="59" text-anchor="end" class="value">%s</text>`,
 		left, metric.format(minimum), left+plotWidth, metric.format(maximum),
 	)
-	baseline := baselineIndex(report)
 	for index, benchmark := range report.Benchmarks {
 		y := 76 + index*rowHeight
-		color := chartColor(index, baseline)
+		color := toolColor(index)
 		fmt.Fprintf(
 			&body,
 			`<text x="16" y="%d" class="label" style="fill:%s">%s</text>`+
@@ -57,16 +71,22 @@ func absoluteDistributionChart(report model.Report, metric chartMetric) svgChart
 			left, y-4, left+plotWidth,
 		)
 		for runIndex, run := range benchmark.Runs {
+			if !chartRunAvailable(metric, run) {
+				continue
+			}
 			jitter := (runIndex%3 - 1) * 5
-			fmt.Fprintf(
-				&body, `<circle class="run-dot" cx="%.1f" cy="%d" `+
-					`r="1.75" fill="%s" opacity=".65"/>`,
-				position(metric.run(run)), y-4+jitter, color,
-			)
+			body.WriteString(`<circle class="run-dot" cx="`)
+			writeChartFloat(&body, position(metric.run(run)))
+			body.WriteString(`" cy="`)
+			writeChartInt(&body, y-4+jitter)
+			body.WriteString(`" r="1.75" fill="`)
+			body.WriteString(color)
+			body.WriteString(`" opacity=".65"/>`)
 		}
-		stats := metric.stats(benchmark)
+		stats := metric.stats(benchmark.Summary)
 		mean := position(stats.Mean)
-		if stats.CI95Valid {
+		if stats.CI95Valid && finiteNumber(stats.CI95Low) &&
+			finiteNumber(stats.CI95High) {
 			low, high := position(stats.CI95Low), position(stats.CI95High)
 			fmt.Fprintf(
 				&body,
@@ -87,8 +107,8 @@ func absoluteDistributionChart(report model.Report, metric chartMetric) svgChart
 		)
 	}
 	return svgChart{
-		kind: "distribution", title: metric.name, slug: chartSlug(metric.name),
-		description: distributionChartDescription(metric.name),
+		kind: "distribution", title: metric.chartName, slug: chartSlug(metric.chartName),
+		description: distributionChartDescription(metric.chartName),
 		body:        body.String(), height: height,
 	}
 }

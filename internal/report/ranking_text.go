@@ -8,8 +8,11 @@ import (
 	"github.com/shellcell/snailrace/internal/model"
 )
 
-func writeTextRanking(writer io.Writer, report model.Report) {
-	ranking := calculateRanking(report)
+func writeTextRankingWith(writer io.Writer, report model.Report, ranking rankingData) {
+	if len(ranking.Rows) == 0 {
+		fmt.Fprintf(writer, "Ranking unavailable\t%s\n\n", ranking.UnavailableReason)
+		return
+	}
 	fmt.Fprintln(writer, "Category leaders (point estimates)\tTool\tValue")
 	for _, winner := range ranking.winners {
 		fmt.Fprintf(
@@ -22,36 +25,40 @@ func writeTextRanking(writer io.Writer, report model.Report) {
 		writer, "Comparison baseline\t%s\n\n",
 		report.Benchmarks[baselineIndex(report)].Tool.Name,
 	)
+	if !ranking.Available {
+		fmt.Fprintf(writer, "Overall ranking unavailable\t%s\n\n", ranking.UnavailableReason)
+		return
+	}
 	fmt.Fprintf(
 		writer,
 		"Overall ranking (point estimates)\tTool\tBalanced\t%s\tCPU cost\tRAM aggregate\tLinked size\n",
 		ranking.primaryLabel,
 	)
-	for _, row := range ranking.rows {
+	for _, row := range ranking.Rows {
 		ramValue := "N/A"
-		if ranking.ramAvailable {
+		if ranking.RAMAvailable {
 			ramValue = rankingCell(
-				formatBytes(row.ramValue), row.ramScore, row.ramRank, true,
+				formatBytes(row.RAMValue), row.RAMScore, row.RAMRank, true,
 			)
 		}
 		fmt.Fprintf(
 			writer, "#%d\t%s\t%s\t%s\t%s\t%s\t%s\n",
-			row.overallRank, reportToolLabel(report, row.benchmark),
+			row.OverallRank, reportToolLabel(report, row.Benchmark),
 			rankingCell(
-				formatScore(row.overallScore), row.overallScore/ranking.bestOverall,
-				row.overallRank, true,
+				formatScore(row.OverallScore), row.OverallScore/ranking.BestOverall,
+				row.OverallRank, true,
 			),
 			rankingCell(
-				ranking.primaryUnit(row.primaryValue), row.primaryScore,
-				row.primaryRank, ranking.primaryRatio,
+				ranking.primaryUnit(row.PrimaryValue), row.PrimaryScore,
+				row.PrimaryRank, ranking.PrimaryRatio,
 			),
 			rankingCell(
-				cpuRankingValue(report, row), row.cpuScore, row.cpuRank, ranking.cpuRatio,
+				cpuRankingValue(report, row), row.CPUScore, row.CPURank, ranking.CPURatio,
 			),
 			ramValue,
 			rankingCell(
-				formatBytes(row.footprintValue), row.footprintScore,
-				row.footprintRank, ranking.footprintRatio,
+				formatBytes(row.FootprintValue), row.FootprintScore,
+				row.FootprintRank, ranking.FootprintRatio,
 			),
 		)
 	}
@@ -71,10 +78,10 @@ func rankingCell(value string, score float64, rank int, ratioAvailable bool) str
 }
 
 func cpuRankingValue(report model.Report, row rankingRow) string {
-	if report.Config.Mode == "tui" && report.Config.DurationSeconds > 0 {
-		return formatPercent(row.cpuValue)
+	if report.Config.FixedDurationTUI() {
+		return formatPercent(row.CPUValue)
 	}
-	return formatDuration(row.cpuValue)
+	return formatDuration(row.CPUValue)
 }
 
 func formatScore(value float64) string {

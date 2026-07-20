@@ -30,4 +30,19 @@ func TestDefaultFormatIsHTML(t *testing.T) {
 	if !reflect.DeepEqual(options.formats, []string{"html"}) {
 		t.Fatalf("formats = %#v, want html", options.formats)
 	}
+	if options.output != "." {
+		t.Fatalf("output = %q, want current directory", options.output)
+	}
+}
+
+func TestEmptyOutputRequiresNoSave(t *testing.T) {
+	if _, err := parseOptions([]string{"-o", "", "--", "true"}, io.Discard); err == nil {
+		t.Fatal("empty output should require -no-save")
+	}
+	options, err := parseOptions(
+		[]string{"-no-save", "-o", "", "--", "true"}, io.Discard,
+	)
+	if err != nil || !options.noSave {
+		t.Fatalf("no-save options = %+v, error = %v", options, err)
+	}
 }

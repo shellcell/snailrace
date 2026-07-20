@@ -1,35 +1,45 @@
 package runner
 
 import (
-	"os/exec"
+	"os"
 	"time"
 
 	"github.com/shellcell/snailrace/internal/model"
-	"github.com/shellcell/snailrace/internal/platform"
 )
 
-func makeTUIRun(
-	cmd *exec.Cmd,
+func makeRun(
+	state *os.ProcessState,
 	elapsed time.Duration,
 	user, system float64,
 	rusageRSS uint64,
-	peak platform.Metrics,
+	samples sampleAggregate,
 	reason string,
 ) model.Run {
+	peak := samples.peak
+	peak.Processes = max(peak.Processes, 1)
+	peak.Threads = max(peak.Threads, 1)
 	return model.Run{
-		ExitCode: cmd.ProcessState.ExitCode(), WallSeconds: elapsed.Seconds(),
+		ExitCode: state.ExitCode(), WallSeconds: elapsed.Seconds(),
 		CPUUserSeconds: user, CPUSystemSeconds: system,
 		AverageCPUPercent:          averageCPUPercent(user, system, elapsed),
 		PeakResidentBytes:          float64(peak.ResidentBytes),
 		PeakPhysicalFootprintBytes: float64(peak.PhysicalFootprintBytes),
+		PhysicalFootprintValid:     peak.PhysicalFootprintValid,
 		OSMaxRSSBytes:              float64(rusageRSS),
-		MeanResidentBytes:          sampledMeanResident(peak),
+		MeanResidentBytes:          samples.meanResident(),
 		PeakVirtualBytes:           float64(peak.VirtualBytes),
 		PeakProcesses:              float64(peak.Processes),
 		PeakThreads:                float64(peak.Threads),
 		PeakFileDescriptors:        float64(peak.FileDescriptors),
 		StopReason:                 reason,
-		SampleCount:                int(peak.SampleCount),
-		SampleCoverageSeconds:      peak.SampleCoverageSeconds,
+		SampleCount:                int(samples.sampleCount),
+		SampleCoverageSeconds:      samples.sampleCoverageSeconds,
 	}
+}
+
+func averageCPUPercent(user, system float64, elapsed time.Duration) float64 {
+	if elapsed <= 0 {
+		return 0
+	}
+	return (user + system) / elapsed.Seconds() * 100
 }

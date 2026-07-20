@@ -7,8 +7,14 @@ import (
 	"github.com/shellcell/snailrace/internal/model"
 )
 
-func writeMarkdownRanking(writer io.Writer, report model.Report) {
-	ranking := calculateRanking(report)
+func writeMarkdownRankingWith(writer io.Writer, report model.Report, ranking rankingData) {
+	if len(ranking.Rows) == 0 {
+		fmt.Fprintf(
+			writer, "## Ranking Unavailable\n\n%s.\n\n",
+			escapeMarkdown(ranking.UnavailableReason),
+		)
+		return
+	}
 	fmt.Fprintln(writer, "## Category Leaders (Point Estimates)")
 	fmt.Fprintln(writer, "\n| Category | Tool | Value |")
 	fmt.Fprintln(writer, "|---|---|---:|")
@@ -22,6 +28,13 @@ func writeMarkdownRanking(writer io.Writer, report model.Report) {
 		writer, "\nComparison baseline: **%s**. Lower balanced index is better.\n",
 		escapeMarkdown(report.Benchmarks[baselineIndex(report)].Tool.Name),
 	)
+	if !ranking.Available {
+		fmt.Fprintf(
+			writer, "\n## Overall Ranking Unavailable\n\n%s.\n\n",
+			escapeMarkdown(ranking.UnavailableReason),
+		)
+		return
+	}
 	fmt.Fprintln(writer, "\n## Overall Ranking (Point Estimates)")
 	fmt.Fprintf(
 		writer,
@@ -29,32 +42,32 @@ func writeMarkdownRanking(writer io.Writer, report model.Report) {
 		ranking.primaryLabel,
 	)
 	fmt.Fprintln(writer, "|---:|---|---:|---:|---:|---:|---:|")
-	for _, row := range ranking.rows {
+	for _, row := range ranking.Rows {
 		ramValue := "N/A"
-		if ranking.ramAvailable {
+		if ranking.RAMAvailable {
 			ramValue = rankingCell(
-				formatBytes(row.ramValue), row.ramScore, row.ramRank, true,
+				formatBytes(row.RAMValue), row.RAMScore, row.RAMRank, true,
 			)
 		}
 		fmt.Fprintf(
 			writer, "| #%d | %s | %s | %s | %s | %s | %s |\n",
-			row.overallRank,
-			escapeMarkdown(reportToolLabel(report, row.benchmark)),
+			row.OverallRank,
+			escapeMarkdown(reportToolLabel(report, row.Benchmark)),
 			rankingCell(
-				formatScore(row.overallScore), row.overallScore/ranking.bestOverall,
-				row.overallRank, true,
+				formatScore(row.OverallScore), row.OverallScore/ranking.BestOverall,
+				row.OverallRank, true,
 			),
 			rankingCell(
-				ranking.primaryUnit(row.primaryValue), row.primaryScore,
-				row.primaryRank, ranking.primaryRatio,
+				ranking.primaryUnit(row.PrimaryValue), row.PrimaryScore,
+				row.PrimaryRank, ranking.PrimaryRatio,
 			),
 			rankingCell(
-				cpuRankingValue(report, row), row.cpuScore, row.cpuRank, ranking.cpuRatio,
+				cpuRankingValue(report, row), row.CPUScore, row.CPURank, ranking.CPURatio,
 			),
 			ramValue,
 			rankingCell(
-				formatBytes(row.footprintValue), row.footprintScore,
-				row.footprintRank, ranking.footprintRatio,
+				formatBytes(row.FootprintValue), row.FootprintScore,
+				row.FootprintRank, ranking.FootprintRatio,
 			),
 		)
 	}

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"html"
 	"io"
-	"strings"
 
 	"github.com/shellcell/snailrace/internal/model"
 )
@@ -58,7 +57,10 @@ th:first-child,td:first-child{text-align:left}code{color:var(--accent);white-spa
 .command-item{grid-template-columns:1fr}}
 </style></head><body><main>`
 
-func writeHTML(writer io.Writer, report model.Report) error {
+func writeHTML(writer io.Writer, renderer *Renderer) error {
+	report := renderer.displayReport
+	checked := newErrorWriter(writer)
+	writer = checked
 	fmt.Fprint(writer, htmlStart)
 	fmt.Fprintf(
 		writer,
@@ -67,16 +69,27 @@ func writeHTML(writer io.Writer, report model.Report) error {
 		html.EscapeString(report.Host.OS), html.EscapeString(report.Host.Architecture),
 	)
 	writeCards(writer, report)
-	writeHTMLCommandLegend(writer, report)
-	if len(report.Benchmarks) > 1 {
-		writeHTMLRanking(writer, report)
+	fmt.Fprintf(
+		writer, `<p class="muted">Balanced index dimensions actually included: %s.</p>`,
+		html.EscapeString(renderer.dimensionText),
+	)
+	for _, caveat := range renderer.caveats {
+		fmt.Fprintf(
+			writer, `<p class="uncertain">Reliability: %s.</p>`,
+			html.EscapeString(caveat),
+		)
 	}
-	charts := reportCharts(report)
+	writeHTMLCommandLegend(writer, report)
+	writeHTMLFailures(writer, report)
+	if len(report.Benchmarks) > 1 {
+		writeHTMLRanking(writer, report, renderer.ranking)
+	}
+	charts := renderer.reportCharts()
 	for _, section := range chartSections(charts) {
 		writeHTMLChartSection(writer, section.title, section.charts)
 	}
 	if len(report.Benchmarks) > 1 {
-		writeHTMLComparison(writer, report)
+		writeHTMLComparison(writer, renderer)
 	}
 	fmt.Fprint(writer, "<h2>Statistical detail</h2>")
 	for index, benchmark := range report.Benchmarks {
@@ -89,8 +102,8 @@ func writeHTML(writer io.Writer, report model.Report) error {
 	for _, note := range report.Notes {
 		fmt.Fprintf(writer, "<p>Note: %s</p>", html.EscapeString(note))
 	}
-	_, err := fmt.Fprint(writer, "</div></main></body></html>")
-	return err
+	fmt.Fprint(writer, "</div></main></body></html>")
+	return checked.Err()
 }
 
 type chartSection struct {
@@ -165,9 +178,11 @@ func writeHTMLChartColumn(writer io.Writer, charts []svgChart) {
 			`<div class="chart"><div class="chart-frame">`+
 				`<button type="button" class="chart-help" `+
 				`aria-label="%s" title="%s">?</button>`+
-				`<div class="chart-tooltip" role="tooltip">%s</div>%s</div></div>`,
-			label, explanation, explanation, chart.html(),
+				`<div class="chart-tooltip" role="tooltip">%s</div>`,
+			label, explanation, explanation,
 		)
+		chart.writeHTML(writer)
+		fmt.Fprint(writer, `</div></div>`)
 	}
 	fmt.Fprint(writer, "</div>")
 }
@@ -209,7 +224,7 @@ func writeHTMLBenchmark(
 	}
 	fmt.Fprintf(
 		writer, `<pre class="command"><code>%s</code></pre>`,
-		html.EscapeString(strings.Join(benchmark.Tool.Command, " ")),
+		html.EscapeString(fullCommand(benchmark)),
 	)
 	fmt.Fprintf(
 		writer,
@@ -227,7 +242,7 @@ func writeHTMLBenchmark(
 		formatCount(benchmark.Summary.ValidSampleCount.Mean),
 		formatDuration(benchmark.Summary.SampleCoverageSeconds.Mean),
 	)
-	if !benchmarkSamplesReliable(benchmark, report.Config.IntervalMS/1000) {
+	if !model.SamplingReliable(benchmark, report.Config.IntervalMS/1000) {
 		fmt.Fprint(
 			writer,
 			`<p class="uncertain">Sampling quality: LIMITED `+
@@ -237,7 +252,7 @@ func writeHTMLBenchmark(
 	fmt.Fprint(writer, `<div class="scroll"><table><thead><tr><th>Metric</th>`+
 		`<th>Mean ± σ</th><th>95% CI mean</th><th>Median</th>`+
 		`<th>P95</th><th>Range</th></tr></thead><tbody>`)
-	for _, row := range metricRows {
+	for _, row := range metricCatalog {
 		writeHTMLRow(writer, operatingSystem, row, benchmark.Summary)
 	}
 	fmt.Fprint(writer, "</tbody></table></div>")
@@ -251,10 +266,10 @@ func writeHTMLBenchmark(
 func writeHTMLRow(
 	writer io.Writer,
 	operatingSystem string,
-	row metricRow,
+	row metricDefinition,
 	summary model.Summary,
 ) {
-	if !available(row, operatingSystem) {
+	if !availableFor(row, operatingSystem, summary) {
 		fmt.Fprintf(writer, "<tr><td>%s</td><td colspan=\"5\">N/A</td></tr>", row.name)
 		return
 	}

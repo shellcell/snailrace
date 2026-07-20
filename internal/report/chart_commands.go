@@ -20,7 +20,7 @@ func commandLegendChart(report model.Report) svgChart {
 		y := height
 		fmt.Fprintf(
 			&body, `<text x="16" y="%d" class="label" style="fill:%s">%d. %s</text>`,
-			y, toolColor(report, index), index+1,
+			y, toolColor(index), index+1,
 			html.EscapeString(reportToolLabel(report, index)),
 		)
 		for _, line := range lines {

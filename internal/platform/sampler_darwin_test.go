@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestSampleTreeReadsProcessGroup(t *testing.T) {
+func TestSampleProcessGroupReadsProcessGroup(t *testing.T) {
 	cmd := exec.Command("/bin/sleep", "1")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
@@ -17,7 +17,7 @@ func TestSampleTreeReadsProcessGroup(t *testing.T) {
 		_ = cmd.Wait()
 	}()
 
-	metrics, valid := SampleTree(cmd.Process.Pid)
+	metrics, valid := SampleProcessGroup(cmd.Process.Pid)
 	if !valid {
 		t.Fatal("process group leader was not sampled")
 	}

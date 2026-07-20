@@ -22,6 +22,17 @@ type Config struct {
 	OutputMode        string        `json:"output_mode"`
 }
 
+const (
+	ModeCommand = "command"
+	ModeTUI     = "tui"
+)
+
+func (config Config) IsTUI() bool { return config.Mode == ModeTUI }
+
+func (config Config) FixedDurationTUI() bool {
+	return config.IsTUI() && config.DurationSeconds > 0
+}
+
 type HostInfo struct {
 	OS                string `json:"os"`
 	Architecture      string `json:"architecture"`
@@ -38,6 +49,9 @@ type HostInfo struct {
 type ToolInfo struct {
 	Name               string     `json:"name"`
 	Command            []string   `json:"command"`
+	ShellCommand       bool       `json:"shell_command"`
+	ShellTarget        bool       `json:"-"`
+	ProvenanceVerified bool       `json:"provenance_verified"`
 	Executable         string     `json:"executable,omitempty"`
 	SizeBytes          int64      `json:"size_bytes,omitempty"`
 	SHA256             string     `json:"sha256,omitempty"`
@@ -61,6 +75,7 @@ type Run struct {
 	AverageCPUPercent          float64 `json:"average_cpu_percent"`
 	PeakResidentBytes          float64 `json:"peak_resident_bytes"`
 	PeakPhysicalFootprintBytes float64 `json:"peak_physical_footprint_bytes,omitempty"`
+	PhysicalFootprintValid     bool    `json:"physical_footprint_valid"`
 	OSMaxRSSBytes              float64 `json:"os_max_rss_bytes"`
 	MeanResidentBytes          float64 `json:"mean_resident_bytes"`
 	PeakVirtualBytes           float64 `json:"peak_virtual_bytes"`
@@ -70,6 +85,10 @@ type Run struct {
 	StopReason                 string  `json:"stop_reason"`
 	SampleCount                int     `json:"valid_sample_count"`
 	SampleCoverageSeconds      float64 `json:"sample_coverage_seconds"`
+}
+
+func (run Run) Failed() bool {
+	return run.StopReason != "duration" && run.ExitCode != 0
 }
 
 type Stats struct {
@@ -114,6 +133,20 @@ type Benchmark struct {
 	Tool    ToolInfo `json:"tool"`
 	Runs    []Run    `json:"runs"`
 	Summary Summary  `json:"summary"`
+}
+
+func (benchmark Benchmark) FailedRunCount() int {
+	count := 0
+	for _, run := range benchmark.Runs {
+		if run.Failed() {
+			count++
+		}
+	}
+	return count
+}
+
+func (benchmark Benchmark) EligibleForRanking() bool {
+	return len(benchmark.Runs) > 0 && benchmark.FailedRunCount() == 0
 }
 
 type Report struct {

@@ -3,31 +3,40 @@ package platform
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
 
-func LinkedFiles(executable string) []LinkedDependency {
+func LinkedFiles(ctx context.Context, executable string) ([]LinkedDependency, error) {
 	type queuedLibrary struct {
 		path   string
 		rpaths []string
 	}
-	executableRPaths := loadRPaths(executable, executable, executable)
+	executableRPaths := loadRPaths(ctx, executable, executable, executable)
 	queue := []queuedLibrary{{path: executable, rpaths: executableRPaths}}
 	seen := map[string]bool{executable: true}
 	var result []LinkedDependency
 	for len(queue) > 0 {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		current := queue[0]
 		queue = queue[1:]
-		output, err := exec.Command("/usr/bin/otool", "-L", current.path).Output()
+		output, err := exec.CommandContext(ctx, "/usr/bin/otool", "-L", current.path).Output()
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			continue
 		}
-		rpaths := append(loadRPaths(current.path, executable, current.path), current.rpaths...)
+		rpaths := append(
+			loadRPaths(ctx, current.path, executable, current.path), current.rpaths...,
+		)
 		for _, name := range parseOtool(output) {
-			dependency, ok := resolveDylib(name, executable, current.path, rpaths)
+			dependency, ok := resolveDylib(ctx, name, executable, current.path, rpaths)
 			if !ok || seen[dependency.Path] {
 				continue
 			}
@@ -38,23 +47,26 @@ func LinkedFiles(executable string) []LinkedDependency {
 			}
 		}
 	}
-	return result
+	return result, nil
 }
 
 func parseOtool(output []byte) []string {
 	lines := strings.Split(string(output), "\n")
 	result := make([]string, 0, len(lines))
 	for _, line := range lines[1:] {
-		fields := strings.Fields(line)
-		if len(fields) > 0 {
-			result = append(result, fields[0])
+		line = strings.TrimSpace(line)
+		if metadata := strings.LastIndex(line, " (compatibility version "); metadata >= 0 {
+			line = line[:metadata]
+		}
+		if line != "" {
+			result = append(result, line)
 		}
 	}
 	return result
 }
 
-func loadRPaths(path, executable, loader string) []string {
-	output, err := exec.Command("/usr/bin/otool", "-l", path).Output()
+func loadRPaths(ctx context.Context, path, executable, loader string) []string {
+	output, err := exec.CommandContext(ctx, "/usr/bin/otool", "-l", path).Output()
 	if err != nil {
 		return nil
 	}
@@ -70,16 +82,21 @@ func loadRPaths(path, executable, loader string) []string {
 		if !wantPath || !strings.HasPrefix(line, "path ") {
 			continue
 		}
-		fields := strings.Fields(line)
-		if len(fields) >= 2 {
-			result = append(result, expandDylibPath(fields[1], executable, loader))
+		path := strings.TrimSpace(strings.TrimPrefix(line, "path "))
+		if metadata := strings.LastIndex(path, " (offset "); metadata >= 0 {
+			path = path[:metadata]
+		}
+		if path != "" {
+			result = append(result, expandDylibPath(path, executable, loader))
 		}
 		wantPath = false
 	}
 	return result
 }
 
-func resolveDylib(name, executable, loader string, rpaths []string) (LinkedDependency, bool) {
+func resolveDylib(
+	ctx context.Context, name, executable, loader string, rpaths []string,
+) (LinkedDependency, bool) {
 	var candidates []string
 	if suffix, found := strings.CutPrefix(name, "@rpath/"); found {
 		for _, rpath := range rpaths {
@@ -101,7 +118,7 @@ func resolveDylib(name, executable, loader string, rpaths []string) (LinkedDepen
 			sharedCacheCandidate = resolved
 		}
 	}
-	if sharedCacheCandidate != "" && inSharedCache(sharedCacheCandidate) {
+	if sharedCacheCandidate != "" && inSharedCache(ctx, sharedCacheCandidate) {
 		return LinkedDependency{Path: sharedCacheCandidate, SharedCache: true}, true
 	}
 	return LinkedDependency{}, false
@@ -117,6 +134,6 @@ func isSharedCachePath(path string) bool {
 		strings.HasPrefix(path, "/System/Library/")
 }
 
-func inSharedCache(path string) bool {
-	return exec.Command("/usr/bin/dyld_info", "-dependents", path).Run() == nil
+func inSharedCache(ctx context.Context, path string) bool {
+	return exec.CommandContext(ctx, "/usr/bin/dyld_info", "-dependents", path).Run() == nil
 }

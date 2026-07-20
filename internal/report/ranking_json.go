@@ -13,11 +13,18 @@ type jsonWinner struct {
 	Value    string `json:"formatted_value"`
 }
 
+type jsonFailure struct {
+	Tool      string `json:"tool"`
+	Failed    int    `json:"failed_runs"`
+	Total     int    `json:"total_runs"`
+	ExitCodes []int  `json:"exit_codes"`
+}
+
 type jsonRankingRow struct {
-	Rank                  int      `json:"rank"`
+	Rank                  int      `json:"rank,omitempty"`
 	Tool                  string   `json:"tool"`
-	BalancedIndex         float64  `json:"balanced_index"`
-	BalancedDeltaPercent  float64  `json:"balanced_delta_percent"`
+	BalancedIndex         *float64 `json:"balanced_index,omitempty"`
+	BalancedDeltaPercent  *float64 `json:"balanced_delta_percent,omitempty"`
 	PrimaryValue          float64  `json:"primary_value"`
 	PrimaryRank           int      `json:"primary_rank"`
 	PrimaryDeltaPercent   *float64 `json:"primary_delta_percent,omitempty"`
@@ -33,28 +40,51 @@ type jsonRankingRow struct {
 }
 
 type jsonRanking struct {
-	Method        string           `json:"method"`
-	PrimaryMetric string           `json:"primary_metric"`
-	Winners       []jsonWinner     `json:"winners"`
-	Rows          []jsonRankingRow `json:"rows"`
+	Available          bool             `json:"available"`
+	UnavailableReason  string           `json:"unavailable_reason,omitempty"`
+	Method             string           `json:"method"`
+	PrimaryMetric      string           `json:"primary_metric"`
+	IncludedDimensions []string         `json:"included_dimensions"`
+	Winners            []jsonWinner     `json:"winners"`
+	Rows               []jsonRankingRow `json:"rows"`
 }
 
-func writeJSON(writer io.Writer, report model.Report) error {
+func writeJSON(writer io.Writer, renderer *Renderer) error {
+	report := renderer.rawReport
 	payload := struct {
 		model.Report
-		Ranking jsonRanking `json:"ranking"`
-	}{Report: report, Ranking: makeJSONRanking(report)}
+		Ranking     jsonRanking   `json:"ranking"`
+		Failures    []jsonFailure `json:"failures,omitempty"`
+		Reliability []string      `json:"reliability_caveats,omitempty"`
+	}{
+		Report: report, Ranking: makeJSONRanking(report, renderer.ranking),
+		Failures: makeJSONFailures(report), Reliability: renderer.rawCaveats,
+	}
 	encoder := json.NewEncoder(writer)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(payload)
 }
 
-func makeJSONRanking(report model.Report) jsonRanking {
-	ranking := calculateRanking(report)
+func makeJSONFailures(report model.Report) []jsonFailure {
+	failures := benchmarkFailures(report)
+	result := make([]jsonFailure, 0, len(failures))
+	for _, failure := range failures {
+		result = append(result, jsonFailure{
+			Tool:   report.Benchmarks[failure.benchmark].Tool.Name,
+			Failed: failure.failed, Total: failure.total,
+			ExitCodes: append([]int(nil), failure.exitCodes...),
+		})
+	}
+	return result
+}
+
+func makeJSONRanking(report model.Report, ranking rankingData) jsonRanking {
 	result := jsonRanking{
+		Available: ranking.Available, UnavailableReason: ranking.UnavailableReason,
 		Method: "equal-weight geometric mean of normalized category costs; included: " +
 			balancedIndexCategories(ranking),
-		PrimaryMetric: ranking.primaryLabel,
+		PrimaryMetric:      ranking.primaryLabel,
+		IncludedDimensions: append([]string(nil), includedDimensionsFromRanking(ranking)...),
 	}
 	for _, winner := range ranking.winners {
 		result.Winners = append(result.Winners, jsonWinner{
@@ -62,27 +92,32 @@ func makeJSONRanking(report model.Report) jsonRanking {
 			Value: winner.value,
 		})
 	}
-	for _, row := range ranking.rows {
+	for _, row := range ranking.Rows {
 		item := jsonRankingRow{
-			Rank: row.overallRank, Tool: report.Benchmarks[row.benchmark].Tool.Name,
-			BalancedIndex:        row.overallScore,
-			BalancedDeltaPercent: (row.overallScore/ranking.bestOverall - 1) * 100,
-			PrimaryValue:         row.primaryValue, PrimaryRank: row.primaryRank,
-			CPUValue: row.cpuValue, CPURank: row.cpuRank,
-			FootprintBytes: row.footprintValue, FootprintRank: row.footprintRank,
+			Tool:         report.Benchmarks[row.Benchmark].Tool.Name,
+			PrimaryValue: row.PrimaryValue, PrimaryRank: row.PrimaryRank,
+			CPUValue: row.CPUValue, CPURank: row.CPURank,
+			FootprintBytes: row.FootprintValue, FootprintRank: row.FootprintRank,
 		}
-		if ranking.primaryRatio {
-			item.PrimaryDeltaPercent = floatPointer((row.primaryScore - 1) * 100)
+		if ranking.Available {
+			item.Rank = row.OverallRank
+			item.BalancedIndex = floatPointer(row.OverallScore)
+			item.BalancedDeltaPercent = floatPointer(
+				(row.OverallScore/ranking.BestOverall - 1) * 100,
+			)
 		}
-		if ranking.cpuRatio {
-			item.CPUDeltaPercent = floatPointer((row.cpuScore - 1) * 100)
+		if ranking.PrimaryRatio {
+			item.PrimaryDeltaPercent = floatPointer((row.PrimaryScore - 1) * 100)
 		}
-		if ranking.footprintRatio {
-			item.FootprintDeltaPercent = floatPointer((row.footprintScore - 1) * 100)
+		if ranking.CPURatio {
+			item.CPUDeltaPercent = floatPointer((row.CPUScore - 1) * 100)
 		}
-		if ranking.ramAvailable {
-			item.RAMValueBytes, item.RAMRank = row.ramValue, row.ramRank
-			item.RAMDeltaPercent = floatPointer((row.ramScore - 1) * 100)
+		if ranking.FootprintRatio {
+			item.FootprintDeltaPercent = floatPointer((row.FootprintScore - 1) * 100)
+		}
+		if ranking.RAMAvailable {
+			item.RAMValueBytes, item.RAMRank = row.RAMValue, row.RAMRank
+			item.RAMDeltaPercent = floatPointer((row.RAMScore - 1) * 100)
 		}
 		result.Rows = append(result.Rows, item)
 	}

@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/shellcell/snailrace/internal/model"
 )
 
 type ChartArtifact struct {
@@ -15,17 +13,20 @@ type ChartArtifact struct {
 	Filename   string
 }
 
-func WriteChartFiles(
-	directory string,
-	report model.Report,
-	includeCommands bool,
+func (renderer *Renderer) WriteChartFiles(
+	directory string, includeCommands bool,
 ) ([]ChartArtifact, error) {
+	report := renderer.displayReport
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return nil, err
 	}
-	charts := reportCharts(report)
+	charts := renderer.reportCharts()
 	if includeCommands {
-		charts = append([]svgChart{commandLegendChart(report)}, charts...)
+		prefix := []svgChart{commandLegendChart(report)}
+		if failures := failureChart(report); failures.height > 0 {
+			prefix = append(prefix, failures)
+		}
+		charts = append(prefix, charts...)
 	}
 	artifacts := make([]ChartArtifact, 0, len(charts))
 	for index, chart := range charts {

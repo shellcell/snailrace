@@ -3,11 +3,12 @@ package report
 import (
 	"fmt"
 	"html"
+	"io"
 	"math"
+	"strconv"
 	"strings"
 	"unicode"
 
-	"github.com/shellcell/snailrace/internal/model"
 	"github.com/shellcell/snailrace/internal/style"
 )
 
@@ -30,13 +31,7 @@ type svgChart struct {
 	height      int
 }
 
-type chartMetric struct {
-	name   string
-	format func(float64) string
-	stats  func(model.Benchmark) model.Stats
-	run    func(model.Run) float64
-	row    int
-}
+type chartMetric = metricDefinition
 
 type chartGroup struct {
 	name    string
@@ -44,26 +39,48 @@ type chartGroup struct {
 }
 
 func (chart svgChart) html() string {
-	return fmt.Sprintf(
+	var output strings.Builder
+	output.Grow(len(chart.body) + 512)
+	chart.writeHTML(&output)
+	return output.String()
+}
+
+func (chart svgChart) writeHTML(writer io.Writer) {
+	fmt.Fprintf(
+		writer,
 		`<svg xmlns="http://www.w3.org/2000/svg" role="img" `+
 			`viewBox="0 0 %d %d" width="100%%" `+
-			`style="max-width:%dpx;font-family:monospace">%s%s</svg>`,
-		chartWidth, chart.height, chartWidth, chart.metadata(), chart.body,
+			`style="max-width:%dpx;font-family:monospace">`,
+		chartWidth, chart.height, chartWidth,
 	)
+	chart.writeMetadata(writer)
+	writeChartString(writer, chart.body)
+	writeChartString(writer, `</svg>`)
 }
 
-func (chart svgChart) embedded(x, y int) string {
-	return fmt.Sprintf(
+func (chart svgChart) writeEmbedded(writer io.Writer, x, y int) {
+	fmt.Fprintf(
+		writer,
 		`<svg x="%d" y="%d" width="%d" height="%d" `+
-			`viewBox="0 0 %d %d">%s%s</svg>`,
+			`viewBox="0 0 %d %d">`,
 		x, y, chartWidth, chart.height, chartWidth, chart.height,
-		chart.metadata(), chart.body,
 	)
+	chart.writeMetadata(writer)
+	writeChartString(writer, chart.body)
+	writeChartString(writer, `</svg>`)
 }
 
-func (chart svgChart) metadata() string {
-	return fmt.Sprintf(
-		`<title>%s</title><desc>%s</desc>`,
+func writeChartString(writer io.Writer, value string) {
+	if stringWriter, ok := writer.(io.StringWriter); ok {
+		_, _ = stringWriter.WriteString(value)
+		return
+	}
+	_, _ = fmt.Fprint(writer, value)
+}
+
+func (chart svgChart) writeMetadata(writer io.Writer) {
+	fmt.Fprintf(
+		writer, `<title>%s</title><desc>%s</desc>`,
 		html.EscapeString(chart.accessibleTitle()), html.EscapeString(chart.explanation()),
 	)
 }
@@ -82,11 +99,7 @@ func (chart svgChart) explanation() string {
 	return chart.accessibleTitle()
 }
 
-func chartColor(index, _ int) string {
-	return style.Tool(index).Hex
-}
-
-func toolColor(_ model.Report, index int) string {
+func toolColor(index int) string {
 	return style.Tool(index).Hex
 }
 
@@ -103,7 +116,20 @@ func statusColor(class string) string {
 	}
 }
 
+func writeChartFloat(output *strings.Builder, value float64) {
+	buffer := make([]byte, 0, 24)
+	output.Write(strconv.AppendFloat(buffer, value, 'f', 1, 64))
+}
+
+func writeChartInt(output *strings.Builder, value int) {
+	buffer := make([]byte, 0, 12)
+	output.Write(strconv.AppendInt(buffer, int64(value), 10))
+}
+
 func niceDeltaScale(value float64) float64 {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return 1
+	}
 	value = math.Max(1, value)
 	power := math.Pow(10, math.Floor(math.Log10(value)))
 	normalized := value / power
@@ -117,6 +143,10 @@ func niceDeltaScale(value float64) float64 {
 	default:
 		return 10 * power
 	}
+}
+
+func finiteNumber(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0)
 }
 
 func balanceCharts(charts []svgChart) ([]svgChart, []svgChart) {

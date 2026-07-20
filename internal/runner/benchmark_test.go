@@ -3,6 +3,8 @@ package runner
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -33,6 +35,9 @@ func TestBenchmarkInterruptionKeepsCompletedRounds(t *testing.T) {
 		if len(benchmark.Runs) != 1 {
 			t.Fatalf("tool %d recorded %d runs, want 1 completed round", index, len(benchmark.Runs))
 		}
+		if benchmark.Tool.SHA256 == "" || benchmark.Tool.ProvenanceVerified {
+			t.Fatalf("interrupted tool provenance = %+v", benchmark.Tool)
+		}
 	}
 }
 
@@ -47,6 +52,148 @@ func TestBenchmarkInterruptionBeforeAnyRoundFails(t *testing.T) {
 	)
 	if errors.Is(err, ErrInterrupted) || err == nil {
 		t.Fatalf("err = %v, want a plain cancellation error with no partial results", err)
+	}
+}
+
+func TestBenchmarkContinuesAfterNonZeroExit(t *testing.T) {
+	benchmarks, err := Benchmark(
+		context.Background(),
+		[]Spec{
+			{Name: "exit", Shell: "exit 7"},
+			{Name: "true", Args: []string{"true"}},
+		},
+		Config{Runs: 3, Warmups: 1, Interval: time.Millisecond},
+		Options{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index, benchmark := range benchmarks {
+		if len(benchmark.Runs) != 3 {
+			t.Fatalf("tool %d recorded %d runs, want 3", index, len(benchmark.Runs))
+		}
+	}
+	for _, run := range benchmarks[0].Runs {
+		if run.ExitCode != 7 {
+			t.Fatalf("exit code = %d, want 7", run.ExitCode)
+		}
+	}
+}
+
+func TestNativeExecutableRunsExitZero(t *testing.T) {
+	benchmarks, err := Benchmark(
+		context.Background(),
+		[]Spec{{Name: "direct", Args: []string{"true"}}, {Name: "shell", Shell: "true"}},
+		Config{Runs: 1, Interval: time.Millisecond}, Options{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, benchmark := range benchmarks {
+		if benchmark.Runs[0].ExitCode != 0 {
+			t.Fatalf(
+				"native %s exit code = %d, want 0",
+				benchmark.Tool.Name, benchmark.Runs[0].ExitCode,
+			)
+		}
+		if !benchmark.Tool.ProvenanceVerified {
+			t.Fatalf("native %s provenance not verified", benchmark.Tool.Name)
+		}
+	}
+}
+
+func TestShellBenchmarksInspectDistinctTargetExecutables(t *testing.T) {
+	// Generated targets with different sizes keep the assertions hermetic:
+	// real system binaries can collide byte-for-byte (uname and sleep are the
+	// same size on Ubuntu 24.04).
+	directory := t.TempDir()
+	first := filepath.Join(directory, "first-tool")
+	second := filepath.Join(directory, "second-tool")
+	if err := os.WriteFile(first, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		second, []byte("#!/bin/sh\n# deliberately larger target\nexit 0\n"), 0o755,
+	); err != nil {
+		t.Fatal(err)
+	}
+	benchmarks, err := Benchmark(
+		context.Background(),
+		[]Spec{{Name: "first", Shell: first}, {Name: "second", Shell: second}},
+		Config{Runs: 1, Interval: time.Millisecond}, Options{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if benchmarks[0].Tool.Executable == benchmarks[1].Tool.Executable {
+		t.Fatalf("shell targets share executable %q", benchmarks[0].Tool.Executable)
+	}
+	if !benchmarks[0].Tool.ProvenanceVerified || !benchmarks[1].Tool.ProvenanceVerified {
+		t.Fatal("completed benchmark should verify executable provenance")
+	}
+	if benchmarks[0].Tool.DiskFootprintBytes == benchmarks[1].Tool.DiskFootprintBytes {
+		t.Fatalf(
+			"shell targets share disk footprint %d",
+			benchmarks[0].Tool.DiskFootprintBytes,
+		)
+	}
+}
+
+func TestScriptExecutionPreservesOriginalPath(t *testing.T) {
+	directory := t.TempDir()
+	script := filepath.Join(directory, "tool")
+	if err := os.WriteFile(filepath.Join(directory, "value"), []byte("ok\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		script, []byte("#!/bin/sh\ncat \"$(dirname \"$0\")/value\"\n"), 0o755,
+	); err != nil {
+		t.Fatal(err)
+	}
+	benchmarks, err := Benchmark(
+		context.Background(),
+		[]Spec{{Name: "direct", Args: []string{script}}, {Name: "shell", Shell: script}},
+		Config{Runs: 1, Interval: time.Millisecond}, Options{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, benchmark := range benchmarks {
+		if benchmark.Runs[0].ExitCode != 0 {
+			t.Fatalf("script %s exit code = %d", benchmark.Tool.Name, benchmark.Runs[0].ExitCode)
+		}
+	}
+}
+
+func TestBenchmarkRejectsInvalidInputs(t *testing.T) {
+	validSpec := Spec{Name: "true", Args: []string{"true"}}
+	validConfig := Config{Runs: 1, Interval: time.Millisecond}
+	tests := []struct {
+		name   string
+		specs  []Spec
+		config Config
+	}{
+		{"no specs", nil, validConfig},
+		{"empty spec", []Spec{{Name: "empty"}}, validConfig},
+		{"empty name", []Spec{{Args: []string{"true"}}}, validConfig},
+		{"both command forms", []Spec{{Name: "both", Shell: "true", Args: []string{"true"}}}, validConfig},
+		{"zero runs", []Spec{validSpec}, Config{Interval: time.Millisecond}},
+		{"zero interval", []Spec{validSpec}, Config{Runs: 1}},
+		{"bad schedule index", []Spec{validSpec}, Config{
+			Runs: 1, Interval: time.Millisecond, MeasurementOrder: [][]int{{1}},
+		}},
+		{"wrong schedule rounds", []Spec{validSpec}, Config{
+			Runs: 2, Interval: time.Millisecond, MeasurementOrder: [][]int{{0}},
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := Benchmark(
+				context.Background(), test.specs, test.config, Options{},
+			); err == nil {
+				t.Fatal("expected validation error")
+			}
+		})
 	}
 }
 

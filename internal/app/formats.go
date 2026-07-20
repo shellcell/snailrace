@@ -1,6 +1,10 @@
 package app
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/shellcell/snailrace/internal/report"
+)
 
 type formatValues struct {
 	values []string
@@ -23,6 +27,9 @@ func (formats *formatValues) Set(value string) error {
 	for _, item := range strings.Split(value, ",") {
 		item = strings.ToLower(strings.TrimSpace(item))
 		if item != "" {
+			if info, ok := report.LookupFormat(item); ok {
+				item = string(info.Name)
+			}
 			formats.values = append(formats.values, item)
 		}
 	}

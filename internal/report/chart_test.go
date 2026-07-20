@@ -1,11 +1,40 @@
 package report
 
 import (
+	"math"
 	"strings"
 	"testing"
 
 	"github.com/shellcell/snailrace/internal/model"
 )
+
+func TestEmptyReportBuildsNoCharts(t *testing.T) {
+	if charts := NewRenderer(model.Report{}).reportCharts(); len(charts) != 0 {
+		t.Fatalf("empty report charts = %d, want 0", len(charts))
+	}
+}
+
+func TestChartsOmitNonFiniteCoordinates(t *testing.T) {
+	runs := []model.Run{
+		{Index: 1, WallSeconds: math.Inf(1)},
+		{Index: 2, WallSeconds: math.NaN()},
+	}
+	report := model.Report{
+		Config: model.Config{Baseline: 1, Mode: "command"},
+		Host:   model.HostInfo{OS: "linux"},
+		Benchmarks: []model.Benchmark{{
+			Tool: model.ToolInfo{Name: "invalid", DiskFootprintBytes: 1},
+			Runs: runs, Summary: model.Summarize(runs),
+		}},
+	}
+	for _, chart := range NewRenderer(report).reportCharts() {
+		output := chart.html()
+		if strings.Contains(output, "NaN") || strings.Contains(output, "+Inf") ||
+			strings.Contains(output, "-Inf") {
+			t.Fatalf("chart %q contains non-finite coordinates", chart.title)
+		}
+	}
+}
 
 func TestComparisonChartsContainDeltaAndRunViews(t *testing.T) {
 	report := model.Report{
@@ -15,7 +44,7 @@ func TestComparisonChartsContainDeltaAndRunViews(t *testing.T) {
 			benchmarkWithWallTimes("candidate", 8, 8, 8),
 		},
 	}
-	charts := reportCharts(report)
+	charts := NewRenderer(report).reportCharts()
 	if len(charts) < 2 {
 		t.Fatalf("charts = %d, want delta and distribution charts", len(charts))
 	}
@@ -44,13 +73,13 @@ func TestBaselineChartsSeparateEveryMetric(t *testing.T) {
 		},
 	}
 	var titles []string
-	for _, chart := range reportCharts(report) {
+	for _, chart := range NewRenderer(report).reportCharts() {
 		if chart.kind == "baseline" {
 			titles = append(titles, chart.title)
 		}
 	}
-	if len(titles) != len(chartMetricDefinitions()) {
-		t.Fatalf("baseline charts = %d, want %d: %v", len(titles), len(chartMetricDefinitions()), titles)
+	if len(titles) != len(metricCatalog) {
+		t.Fatalf("baseline charts = %d, want %d: %v", len(titles), len(metricCatalog), titles)
 	}
 	for _, expected := range []string{
 		"Mean RSS", "Peak RSS", "OS-reported max RSS", "Peak virtual memory",
@@ -73,8 +102,8 @@ func TestBaselineChartShowsBaselineConfidenceWhisker(t *testing.T) {
 			benchmarkWithWallTimes("candidate", 8, 9, 10),
 		},
 	}
-	chart := deltaForestChart(report, chartGroup{
-		name: "Wall time", metrics: []chartMetric{chartMetricDefinitions()[0]},
+	chart := deltaForestChart(NewRenderer(report), chartGroup{
+		name: "Wall time", metrics: chartMetrics(metricWall),
 	})
 	if !strings.Contains(chart.body, `class="baseline-ci"`) {
 		t.Fatalf("baseline confidence whisker missing: %s", chart.body)
@@ -87,16 +116,13 @@ func TestBaselineChartShowsBaselineConfidenceWhisker(t *testing.T) {
 func TestToolColorsAreDistinctAndStable(t *testing.T) {
 	seen := make(map[string]bool)
 	for index := 0; index < 10; index++ {
-		color := chartColor(index, 0)
+		color := toolColor(index)
 		if seen[color] {
 			t.Fatalf("tool %d repeats color %s", index, color)
 		}
 		seen[color] = true
-		if chartColor(index, 3) != color || chartColor(index, 7) != color {
-			t.Fatalf("tool %d color changes with baseline", index)
-		}
 	}
-	if chartColor(0, 0) != "#88c0d0" {
+	if toolColor(0) != "#88c0d0" {
 		t.Fatal("first tool should begin with the Frost color")
 	}
 }
@@ -110,12 +136,45 @@ func TestChartLegendsUseToolIdentityColors(t *testing.T) {
 		},
 	}
 	legend := commandLegendChart(report).body
-	ranking := rankingCharts(report)[0].body
+	ranking := rankingCharts(report, calculateRanking(report))[0].body
 	for index := range report.Benchmarks {
-		color := toolColor(report, index)
+		color := toolColor(index)
 		style := `style="fill:` + color + `"`
 		if !strings.Contains(legend, style) || !strings.Contains(ranking, style) {
 			t.Fatalf("tool %d color %s missing from chart legend or ranking", index, color)
+		}
+	}
+}
+
+func TestRankingChartsPutBestAtTopAndWorstAtBottom(t *testing.T) {
+	report := model.Report{
+		Config: model.Config{
+			Mode: "command", Baseline: 3,
+			IndexDimensions: []string{"time", "cpu"},
+		},
+		Benchmarks: []model.Benchmark{
+			benchmarkWithResourceCosts("fast", 1, 9, 300, 300, 300),
+			benchmarkWithResourceCosts("middle", 2, 2, 200, 200, 200),
+			benchmarkWithResourceCosts("efficient", 3, 1, 100, 100, 100),
+		},
+	}
+	expected := map[string][]string{
+		"BALANCED INDEX": {"#1 efficient", "#2 middle", "#3 fast"},
+		"TIME":           {"#1 fast", "#2 middle", "#3 efficient"},
+		"CPU COST":       {"#1 efficient", "#2 middle", "#3 fast"},
+		"RAM AGGREGATE":  {"#1 efficient", "#2 middle", "#3 fast"},
+		"LINKED SIZE":    {"#1 efficient", "#2 middle", "#3 fast"},
+	}
+	for _, chart := range rankingCharts(report, calculateRanking(report)) {
+		order, ok := expected[chart.title]
+		if !ok {
+			t.Fatalf("missing expected order for %s chart", chart.title)
+		}
+		best := strings.Index(chart.body, order[0])
+		middle := strings.Index(chart.body, order[1])
+		worst := strings.Index(chart.body, order[2])
+		if best < 0 || middle <= best || worst <= middle {
+			t.Fatalf("%s chart does not put best at top and worst at bottom", chart.title)
 		}
 	}
 }
@@ -125,7 +184,7 @@ func TestSingleRunDistributionOmitsUndefinedConfidenceWhisker(t *testing.T) {
 		Config:     model.Config{Mode: "command", Baseline: 1},
 		Benchmarks: []model.Benchmark{benchmarkWithWallTimes("tool", 1)},
 	}
-	chart := absoluteDistributionChart(report, chartMetricDefinitions()[0])
+	chart := absoluteDistributionChart(report, metricCatalog[metricWall])
 	if strings.Contains(chart.body, `stroke="#eceff4"`) {
 		t.Fatal("one observation should not render a confidence whisker")
 	}
@@ -136,7 +195,7 @@ func TestDistributionSummaryPaintsAboveRawRuns(t *testing.T) {
 		Config:     model.Config{Mode: "command", Baseline: 1},
 		Benchmarks: []model.Benchmark{benchmarkWithWallTimes("tool", 1, 2)},
 	}
-	body := absoluteDistributionChart(report, chartMetricDefinitions()[0]).body
+	body := absoluteDistributionChart(report, metricCatalog[metricWall]).body
 	dot := strings.Index(body, `class="run-dot"`)
 	whisker := strings.Index(body, `class="mean-ci"`)
 	diamond := strings.Index(body, `class="mean-diamond"`)
@@ -152,9 +211,14 @@ func TestFixedTUIRankingChartUsesCPUUnits(t *testing.T) {
 			benchmarkWithWallTimes("first", 1), benchmarkWithWallTimes("second", 1),
 		},
 	}
-	charts := rankingCharts(report)
-	if len(charts) < 2 || charts[1].title != "CPU" ||
-		!strings.Contains(charts[1].body, "%") {
+	charts := rankingCharts(report, calculateRanking(report))
+	found := false
+	for _, chart := range charts {
+		if chart.title == "CPU" && strings.Contains(chart.body, "%") {
+			found = true
+		}
+	}
+	if !found {
 		t.Fatal("fixed TUI primary ranking chart should show average CPU percentage")
 	}
 }
@@ -164,7 +228,7 @@ func TestSingleToolReportOmitsRankingCharts(t *testing.T) {
 		Config:     model.Config{Mode: "command", Baseline: 1},
 		Benchmarks: []model.Benchmark{benchmarkWithTrendRuns("tool")},
 	}
-	for _, chart := range reportCharts(report) {
+	for _, chart := range NewRenderer(report).reportCharts() {
 		if chart.kind == "ranking" {
 			t.Fatalf("single-tool report should not include ranking chart %q", chart.title)
 		}
@@ -181,7 +245,7 @@ func TestBalancedIndexDescriptionListsIncludedCategories(t *testing.T) {
 		Config:     model.Config{Mode: "command", Baseline: 1},
 		Benchmarks: benchmarks,
 	}
-	description := rankingCharts(report)[0].description
+	description := rankingCharts(report, calculateRanking(report))[0].description
 	for _, expected := range []string{
 		"Included here: wall time, CPU cost, RAM aggregate.",
 		"score = value / best value",
@@ -198,7 +262,7 @@ func TestBalancedIndexDescriptionListsIncludedCategories(t *testing.T) {
 		},
 		Benchmarks: benchmarks,
 	}
-	description = rankingCharts(withDisk)[0].description
+	description = rankingCharts(withDisk, calculateRanking(withDisk))[0].description
 	if !strings.Contains(description, "wall time, CPU cost, RAM aggregate, linked size") {
 		t.Fatalf("disk index missing linked size: %s", description)
 	}
@@ -211,7 +275,7 @@ func TestSingleToolReportHasMetricGroupTrendCharts(t *testing.T) {
 	}
 	var titles []string
 	var combined strings.Builder
-	for _, chart := range reportCharts(report) {
+	for _, chart := range NewRenderer(report).reportCharts() {
 		if chart.kind != "trend" {
 			continue
 		}
@@ -242,7 +306,7 @@ func TestTrendChartsAreSectionedByTool(t *testing.T) {
 		},
 	}
 	var titles []string
-	for _, section := range chartSections(reportCharts(report)) {
+	for _, section := range chartSections(NewRenderer(report).reportCharts()) {
 		if strings.HasPrefix(section.title, "Measurement trends") {
 			titles = append(titles, section.title)
 		}
@@ -263,7 +327,10 @@ func TestTrendLegendValuesDoNotOverlapLabels(t *testing.T) {
 		Benchmarks: []model.Benchmark{benchmarkWithTrendRuns("tool")},
 	}
 	chart := measurementTrendChart(report, 0, chartGroup{
-		name: "MEMORY COST", metrics: chartMetricDefinitions()[5:9],
+		name: "MEMORY COST", metrics: chartMetrics(
+			metricMeanResident, metricPeakResident, metricOSMaxRSS,
+			metricPhysicalFootprint,
+		),
 	})
 	if strings.Contains(chart.body, `x="704"`) {
 		t.Fatalf("trend legend values should not use overlapping right column: %s", chart.body)
@@ -289,7 +356,7 @@ func TestComparisonReportHasPerToolTrendCharts(t *testing.T) {
 			benchmarkWithTrendRuns("second"),
 		},
 	}
-	titles := trendChartTitles(reportCharts(report))
+	titles := trendChartTitles(NewRenderer(report).reportCharts())
 	for _, expected := range []string{
 		"CPU cost trends · first [BASELINE]",
 		"Memory cost trends · first [BASELINE]",
@@ -315,8 +382,8 @@ func TestChartsHaveExplicitDescriptions(t *testing.T) {
 		Benchmarks: []model.Benchmark{benchmarkWithWallTimes("tool", 1, 2)},
 	}
 	chartSets := [][]svgChart{
-		append([]svgChart{commandLegendChart(report)}, reportCharts(report)...),
-		reportCharts(single),
+		append([]svgChart{commandLegendChart(report)}, NewRenderer(report).reportCharts()...),
+		NewRenderer(single).reportCharts(),
 	}
 	for _, charts := range chartSets {
 		for _, chart := range charts {

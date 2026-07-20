@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"os/exec"
 	"syscall"
 	"time"
 
@@ -18,25 +17,37 @@ import (
 
 func runTUIOnce(
 	ctx context.Context,
-	spec Spec,
+	spec commandSpec,
 	interval time.Duration,
 	options Options,
 ) (model.Run, error) {
-	if options.Interactive && (!term.IsTerminal(int(os.Stdin.Fd())) ||
-		!term.IsTerminal(int(os.Stdout.Fd()))) {
+	input := options.Input
+	if input == nil {
+		input = os.Stdin
+	}
+	output := options.TerminalOut
+	if output == nil {
+		output = os.Stdout
+	}
+	inputTerminal, inputIsTerminal := input.(interface{ Fd() uintptr })
+	outputTerminal, outputIsTerminal := output.(interface{ Fd() uintptr })
+	inputFile, inputIsFile := input.(*os.File)
+	if options.Interactive && (!inputIsTerminal || !outputIsTerminal || !inputIsFile ||
+		!term.IsTerminal(int(inputTerminal.Fd())) ||
+		!term.IsTerminal(int(outputTerminal.Fd()))) {
 		return model.Run{}, errors.New(
 			"interactive TUI mode requires terminal stdin and stdout",
 		)
 	}
-	size := terminalSize(options.Width, options.Height)
+	size := terminalSize(inputFile, options.Width, options.Height)
 	var state *term.State
 	var err error
 	if options.Interactive {
-		state, err = term.MakeRaw(int(os.Stdin.Fd()))
+		state, err = term.MakeRaw(int(inputTerminal.Fd()))
 		if err != nil {
 			return model.Run{}, err
 		}
-		defer term.Restore(int(os.Stdin.Fd()), state)
+		defer term.Restore(int(inputTerminal.Fd()), state)
 	}
 
 	cmd := spec.command(ctx)
@@ -46,64 +57,91 @@ func runTUIOnce(
 		return model.Run{}, err
 	}
 	defer terminal.Close()
-	resizeContext, stopResize := context.WithCancel(ctx)
-	defer stopResize()
+	inputContext, stopInput := context.WithCancel(ctx)
+	outputContext, stopOutput := context.WithCancel(ctx)
+	defer stopInput()
+	defer stopOutput()
 	outputDone := make(chan struct{})
+	var inputDone, resizeDone <-chan struct{}
 	if options.Interactive {
-		go io.Copy(terminal, os.Stdin)
-		go copyTerminalOutput(os.Stdout, terminal, outputDone)
+		inputFinished := make(chan struct{})
+		inputDone = inputFinished
+		go copyTerminalInput(
+			inputContext, terminal, int(inputTerminal.Fd()), inputFinished,
+		)
+		go copyInteractiveTerminalOutput(
+			outputContext, int(terminal.Fd()), int(outputTerminal.Fd()), outputDone,
+		)
 		if options.FollowResize {
-			followTerminalResize(resizeContext, terminal)
+			resizeDone = followTerminalResize(inputContext, inputFile, terminal)
 		}
 	} else {
 		go copyTerminalOutput(io.Discard, terminal, outputDone)
 	}
 
-	stopMonitor := make(chan struct{})
-	monitorDone := make(chan platform.Metrics, 1)
-	go monitor(cmd.Process.Pid, interval, stopMonitor, monitorDone)
+	groupID := cmd.Process.Pid
+	monitor := startMonitor(groupID, interval, platform.NewGroupSampler().Sample)
 	waitDone := make(chan error, 1)
 	go func() { waitDone <- cmd.Wait() }()
 
-	waitErr, elapsed, reason := waitForTUI(
-		ctx, cmd, options.Duration, started, waitDone,
+	waitResult := waitForTUI(
+		ctx, groupID, options.Duration, started, waitDone,
 	)
-	signalProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
-	close(stopMonitor)
-	peak := <-monitorDone
-	user, system, rusageRSS := platform.ResourceUsage(cmd.ProcessState)
-	peak.Processes = max(peak.Processes, 1)
-	peak.Threads = max(peak.Threads, 1)
-	if ctx.Err() != nil {
-		return model.Run{}, ctx.Err()
+	signalProcessGroup(groupID, syscall.SIGKILL)
+	samples := monitor.finish()
+	stopInput()
+	if inputDone != nil {
+		<-inputDone
 	}
-	if options.Duration > 0 && reason == "exited" {
-		return model.Run{}, errors.New("TUI exited before the fixed duration")
-	}
-	if waitErr != nil && reason == "exited" {
-		return model.Run{}, waitErr
+	if resizeDone != nil {
+		<-resizeDone
 	}
 	select {
 	case <-outputDone:
 	case <-time.After(100 * time.Millisecond):
+		stopOutput()
+		_ = terminal.Close()
+		<-outputDone
 	}
-	return makeTUIRun(cmd, elapsed, user, system, rusageRSS, peak, reason), nil
+	user, system, rusageRSS := platform.ResourceUsage(cmd.ProcessState)
+	if ctx.Err() != nil {
+		return model.Run{}, ctx.Err()
+	}
+	if options.Duration > 0 && waitResult.reason == "exited" {
+		return model.Run{}, errors.New("TUI exited before the fixed duration")
+	}
+	if waitResult.err != nil && waitResult.reason == "exited" &&
+		!isNonZeroExit(cmd, waitResult.err) {
+		return model.Run{}, waitResult.err
+	}
+	return makeRun(
+		cmd.ProcessState, waitResult.elapsed, user, system, rusageRSS,
+		samples, waitResult.reason,
+	), nil
+}
+
+type tuiWaitResult struct {
+	err     error
+	elapsed time.Duration
+	reason  string
 }
 
 func waitForTUI(
 	ctx context.Context,
-	cmd *exec.Cmd,
+	groupID int,
 	duration time.Duration,
 	started time.Time,
 	waitDone <-chan error,
-) (error, time.Duration, string) {
+) tuiWaitResult {
 	if duration == 0 {
 		select {
 		case err := <-waitDone:
-			return err, time.Since(started), "exited"
+			return tuiWaitResult{err: err, elapsed: time.Since(started), reason: "exited"}
 		case <-ctx.Done():
-			signalProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
-			return <-waitDone, time.Since(started), "interrupted"
+			signalProcessGroup(groupID, syscall.SIGKILL)
+			return tuiWaitResult{
+				err: <-waitDone, elapsed: time.Since(started), reason: "interrupted",
+			}
 		}
 	}
 	remaining := time.Until(started.Add(duration))
@@ -114,18 +152,15 @@ func waitForTUI(
 	defer timer.Stop()
 	select {
 	case err := <-waitDone:
-		return err, time.Since(started), "exited"
+		return tuiWaitResult{err: err, elapsed: time.Since(started), reason: "exited"}
 	case <-ctx.Done():
-		signalProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
-		return <-waitDone, time.Since(started), "interrupted"
-	case <-timer.C:
-		signalProcessGroup(cmd.Process.Pid, syscall.SIGTERM)
-		select {
-		case err := <-waitDone:
-			return err, time.Since(started), "duration"
-		case <-time.After(time.Second):
-			signalProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
-			return <-waitDone, time.Since(started), "duration"
+		signalProcessGroup(groupID, syscall.SIGKILL)
+		return tuiWaitResult{
+			err: <-waitDone, elapsed: time.Since(started), reason: "interrupted",
 		}
+	case <-timer.C:
+		elapsed := time.Since(started)
+		signalProcessGroup(groupID, syscall.SIGKILL)
+		return tuiWaitResult{err: <-waitDone, elapsed: elapsed, reason: "duration"}
 	}
 }

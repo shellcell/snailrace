@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/shellcell/snailrace/internal/model"
 )
@@ -19,15 +20,58 @@ func Benchmark(
 	config Config,
 	options Options,
 ) ([]model.Benchmark, error) {
+	if err := validateBenchmarkInputs(ctx, specs, config); err != nil {
+		return nil, err
+	}
+	specs = append([]Spec(nil), specs...)
+	for index := range specs {
+		specs[index].Args = append([]string(nil), specs[index].Args...)
+	}
+	prepared := make([]preparedSpec, len(specs))
+	for index, spec := range specs {
+		prepared[index] = preparedSpec{Spec: spec}
+	}
 	benchmarks := make([]model.Benchmark, len(specs))
 	progress := newProgressTracker(options, specs, config)
 	defer progress.finish()
 	inspector := newToolInspector()
+	pinned := make([]*os.File, len(specs))
+	defer func() {
+		for _, file := range pinned {
+			if file != nil {
+				_ = file.Close()
+			}
+		}
+	}()
 	for index, spec := range specs {
 		benchmarks[index].Runs = make([]model.Run, 0, config.Runs)
-		tool, err := inspector.inspect(spec)
+		tool, err := inspector.inspect(ctx, spec)
 		if err != nil {
 			return nil, err
+		}
+		file, err := inspector.pin(ctx, &tool)
+		if err != nil {
+			return nil, fmt.Errorf("hash %q: %w", tool.Name, err)
+		}
+		pinned[index] = file
+		if pinnable := !executableIsScript(file); pinnable {
+			if tool.ShellTarget {
+				target := tool.Executable
+				if pinExecutionSupported {
+					target = pinnedExecutablePath(file)
+				}
+				if command, ok := pinShellExecutable(spec.Shell, target); ok {
+					prepared[index].Shell = command
+					prepared[index].shellTarget = true
+					if pinExecutionSupported {
+						prepared[index].executable = file
+					}
+				}
+			} else if pinExecutionSupported {
+				prepared[index].executable = file
+			} else {
+				prepared[index].executablePath = tool.Executable
+			}
 		}
 		benchmarks[index].Tool = tool
 		progress.setTool(index, tool)
@@ -41,7 +85,7 @@ func Benchmark(
 	interrupted := false
 	for warmup, order := range warmupOrder {
 		for _, index := range order {
-			spec := specs[index]
+			spec := prepared[index]
 			progress.update(
 				index, spec.Name, warmup+1, config.Warmups, true, false, nil,
 			)
@@ -77,7 +121,7 @@ func Benchmark(
 				index, specs[index].Name, runIndex+1, config.Runs,
 				false, false, benchmarks[index].Runs,
 			)
-			run, err := runOnce(ctx, specs[index], config.Interval, options)
+			run, err := runOnce(ctx, prepared[index], config.Interval, options)
 			if err != nil {
 				if ctx.Err() != nil {
 					interrupted = true
@@ -106,8 +150,13 @@ func Benchmark(
 		return nil, ctx.Err()
 	}
 	for index := range benchmarks {
-		if err := inspector.addHash(&benchmarks[index].Tool); err != nil {
-			return nil, fmt.Errorf("hash %q: %w", benchmarks[index].Tool.Name, err)
+		if !interrupted {
+			if err := inspector.verify(
+				ctx, benchmarks[index].Tool, pinned[index],
+			); err != nil {
+				return nil, fmt.Errorf("verify %q: %w", benchmarks[index].Tool.Name, err)
+			}
+			benchmarks[index].Tool.ProvenanceVerified = true
 		}
 		benchmarks[index].Summary = model.Summarize(benchmarks[index].Runs)
 	}
@@ -115,4 +164,10 @@ func Benchmark(
 		return benchmarks, ErrInterrupted
 	}
 	return benchmarks, nil
+}
+
+func executableIsScript(file *os.File) bool {
+	var magic [2]byte
+	count, _ := file.ReadAt(magic[:], 0)
+	return count == len(magic) && magic == [2]byte{'#', '!'}
 }

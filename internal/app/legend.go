@@ -10,6 +10,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/shellcell/snailrace/internal/runner"
+	"github.com/shellcell/snailrace/internal/style"
 )
 
 // printCommandLegend lists each tool's label and full command before measurement
@@ -45,7 +46,7 @@ func printCommandLegend(writer io.Writer, specs []runner.Spec) {
 
 func specCommand(spec runner.Spec) string {
 	if spec.Shell != "" {
-		return spec.Shell
+		return style.CommandText([]string{spec.Shell}, true)
 	}
-	return strings.Join(spec.Args, " ")
+	return style.CommandText(spec.Args, false)
 }

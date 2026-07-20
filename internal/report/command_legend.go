@@ -1,11 +1,14 @@
 package report
 
 import (
-	"strings"
-
 	"github.com/shellcell/snailrace/internal/model"
+	"github.com/shellcell/snailrace/internal/style"
 )
 
 func fullCommand(benchmark model.Benchmark) string {
-	return strings.Join(benchmark.Tool.Command, " ")
+	command := benchmark.Tool.Command
+	if len(command) == 0 {
+		return ""
+	}
+	return style.CommandText(command, benchmark.Tool.ShellCommand)
 }

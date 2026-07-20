@@ -1,11 +1,14 @@
 package app
 
 import (
+	"bytes"
 	"math"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/creack/pty"
 
 	"github.com/shellcell/snailrace/internal/model"
 	"github.com/shellcell/snailrace/internal/runner"
@@ -15,7 +18,7 @@ var progressColorSequence = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 func TestProgressRaceAdvancesBetterExpectedTool(t *testing.T) {
 	event := runner.ProgressEvent{
-		Completed: 2, Total: 4, Elapsed: time.Second, ETA: time.Second,
+		Completed: 2, Total: 4, ETA: time.Second,
 		Estimates: []runner.ProgressEstimate{
 			progressEstimate("better", 1),
 			progressEstimate("worse", 2),
@@ -135,12 +138,71 @@ func TestProgressStatusAlignsNumbersAndName(t *testing.T) {
 	}
 }
 
+func TestProgressRenderedRowsCountsWrappedLines(t *testing.T) {
+	lines := []string{"12345678901", "short"}
+	if got := progressRenderedRows(lines, 10); got != 3 {
+		t.Fatalf("rendered rows = %d, want 3", got)
+	}
+}
+
+func TestProgressRenderedRowsIgnoresANSIAndCountsKnownEmojiWidth(t *testing.T) {
+	line := "\x1b[38;2;136;192;208m🐌\x1b[0m123456789"
+	if got := progressRenderedRows([]string{line}, 10); got != 2 {
+		t.Fatalf("rendered rows = %d, want 2", got)
+	}
+}
+
+func TestProgressRendererRecalculatesRowsAfterResize(t *testing.T) {
+	primary, terminal, err := pty.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer primary.Close()
+	defer terminal.Close()
+	if err := pty.Setsize(terminal, &pty.Winsize{Cols: 200, Rows: 24}); err != nil {
+		t.Fatal(err)
+	}
+	output := progressTerminalBuffer{fd: terminal.Fd()}
+	render := progressRenderer(&output, true, 0)
+	if render == nil {
+		t.Fatal("progress renderer disabled for PTY")
+	}
+	event := runner.ProgressEvent{
+		ToolName: "first", Tool: 1, ToolCount: 1,
+		Iteration: 1, Iterations: 10, Total: 10,
+	}
+	render(event)
+	redrawStart := output.Len()
+	if err := pty.Setsize(terminal, &pty.Winsize{Cols: 40, Rows: 24}); err != nil {
+		t.Fatal(err)
+	}
+	render(event)
+
+	previous := []string{progressStatus(event, 0)}
+	wantRows := progressRenderedRows(previous, 40)
+	redraw := output.String()[redrawStart:]
+	if got := strings.Count(redraw, "\x1b[1A") + 1; got != wantRows {
+		t.Fatalf("cleared rows after resize = %d, want %d", got, wantRows)
+	}
+}
+
+type progressTerminalBuffer struct {
+	bytes.Buffer
+	fd uintptr
+}
+
+func (buffer *progressTerminalBuffer) Fd() uintptr { return buffer.fd }
+
 func progressEstimate(name string, scale float64) runner.ProgressEstimate {
 	stats := model.Stats{Mean: scale}
 	return runner.ProgressEstimate{
 		ToolName: name, Completed: 1, Total: 2, HasEstimate: true,
+		Runs: []model.Run{{
+			WallSeconds: scale, CPUUserSeconds: scale,
+			MeanResidentBytes: scale, PeakResidentBytes: scale,
+		}},
 		DiskFootprintBytes: int64(scale * 100),
-		Estimate: model.Summary{
+		Estimate: &model.Summary{
 			WallSeconds: stats, CPUTotalSeconds: stats,
 			MeanResidentBytes: stats, PeakResidentBytes: stats,
 		},

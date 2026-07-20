@@ -8,6 +8,7 @@ complete -c snailrace -l index -r -a 'time cpu ram disk' -d 'Set index dimension
 complete -c snailrace -l baseline -r -d 'Set 1-based baseline'
 complete -c snailrace -s f -l format -r -a 'html svg markdown json text' -d 'Select report format'
 complete -c snailrace -s o -l output -r -a '(__fish_complete_directories)' -d 'Set report directory'
+complete -c snailrace -l no-save -d 'Do not save report files'
 complete -c snailrace -l verbose -d 'Print full statistical tables'
 complete -c snailrace -l show-output -d 'Forward command output'
 complete -c snailrace -s d -l duration -r -d 'Set fixed TUI duration'

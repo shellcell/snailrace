@@ -3,11 +3,10 @@ package report
 import (
 	"fmt"
 	"io"
-
-	"github.com/shellcell/snailrace/internal/model"
 )
 
-func writeMarkdownComparison(writer io.Writer, report model.Report) {
+func writeMarkdownComparison(writer io.Writer, renderer *Renderer) {
+	report := renderer.displayReport
 	baselinePosition := baselineIndex(report)
 	baseline := report.Benchmarks[baselinePosition]
 	fmt.Fprintf(
@@ -35,19 +34,18 @@ func writeMarkdownComparison(writer io.Writer, report model.Report) {
 			formatBytes(float64(baseline.Tool.DiskFootprintBytes)),
 			formatBytes(float64(candidate.Tool.DiskFootprintBytes)), staticDelta,
 		)
-		for _, row := range metricRows {
-			if !available(row, report.Host.OS) {
+		for _, row := range metricCatalog {
+			if !availableFor(
+				row, report.Host.OS, baseline.Summary, candidate.Summary,
+			) {
 				fmt.Fprintf(writer, "| %s | N/A | N/A | N/A | N/A |\n", row.name)
 				continue
 			}
-			delta := compareMetric(
-				baseline, candidate, row, report.Config.IntervalMS/1000,
-			)
+			delta := renderer.comparison(index, row.id)
 			fmt.Fprintf(
 				writer, "| %s | %s | %s | %s | %s |\n", row.name,
-				row.format(row.stats(baseline.Summary).Mean),
-				row.format(row.stats(candidate.Summary).Mean),
-				formatDelta(delta, row), formatDeltaInterval(delta, row),
+				row.format(delta.baselineMean), row.format(delta.candidateMean),
+				formatDelta(delta), formatDeltaInterval(delta, row),
 			)
 		}
 		fmt.Fprintln(writer)

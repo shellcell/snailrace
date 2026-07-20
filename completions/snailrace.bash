@@ -2,7 +2,7 @@ _snailrace() {
     local cur prev options command_seen expect_value after_separator word i
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    options="-c -command -label -prepare -n -runs -warmups -interval -index -baseline -f -format -o -output -verbose -show-output -d -duration -width -height -v -version -h -help"
+    options="-c -command -label -prepare -n -runs -warmups -interval -index -baseline -f -format -o -output -no-save -verbose -show-output -d -duration -width -height -v -version -h -help"
 
     command_seen=0
     expect_value=0

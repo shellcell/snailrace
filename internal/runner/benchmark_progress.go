@@ -14,7 +14,10 @@ type progressTracker struct {
 	tools     int
 	fixed     time.Duration
 	interval  float64
+	runs      int
 	estimates []ProgressEstimate
+	summaries []model.SummaryAccumulator
+	processed []int
 }
 
 func newProgressTracker(options Options, specs []Spec, config Config) *progressTracker {
@@ -22,14 +25,18 @@ func newProgressTracker(options Options, specs []Spec, config Config) *progressT
 		callback: options.Progress, started: time.Now(),
 		total: len(specs) * (config.Runs + config.Warmups),
 		tools: len(specs), fixed: options.Duration,
+		runs:     config.Runs,
 		interval: float64(config.Interval) / float64(time.Millisecond),
 	}
 	if tracker.callback == nil {
 		return tracker
 	}
 	tracker.estimates = make([]ProgressEstimate, len(specs))
+	tracker.summaries = make([]model.SummaryAccumulator, len(specs))
+	tracker.processed = make([]int, len(specs))
 	for index, spec := range specs {
 		tracker.estimates[index] = ProgressEstimate{ToolName: spec.Name, Total: config.Runs}
+		tracker.summaries[index] = model.NewSummaryAccumulator(config.Runs)
 	}
 	return tracker
 }
@@ -57,8 +64,17 @@ func (tracker *progressTracker) update(
 	if !warmup {
 		estimate := &tracker.estimates[tool]
 		if len(runs) > 0 && (!estimate.HasEstimate || estimate.Completed != len(runs)) {
+			if len(runs) < tracker.processed[tool] {
+				tracker.summaries[tool] = model.NewSummaryAccumulator(tracker.runs)
+				tracker.processed[tool] = 0
+			}
+			for _, run := range runs[tracker.processed[tool]:] {
+				tracker.summaries[tool].Add(run)
+			}
+			tracker.processed[tool] = len(runs)
 			estimate.HasEstimate = true
-			estimate.Estimate = model.Summarize(runs)
+			snapshot := tracker.summaries[tool].Snapshot()
+			estimate.Estimate = &snapshot
 		}
 		estimate.Completed = len(runs)
 		estimate.Runs = runs
@@ -74,12 +90,12 @@ func (tracker *progressTracker) update(
 		Iteration: iteration, Iterations: iterations,
 		Completed: tracker.completed, Total: tracker.total, Warmup: warmup,
 		FixedDuration: tracker.fixed, IntervalMS: tracker.interval,
-		Elapsed: elapsed, ETA: eta,
+		ETA:       eta,
 		Estimates: append([]ProgressEstimate(nil), tracker.estimates...),
 	}
 	if len(runs) > 0 {
 		event.HasEstimate = true
-		event.Estimate = tracker.estimates[tool].Estimate
+		event.Estimate = *tracker.estimates[tool].Estimate
 	}
 	tracker.callback(event)
 }

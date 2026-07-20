@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/shellcell/snailrace/internal/report"
@@ -27,6 +28,9 @@ func validateOptions(result options, commands []string, positional int) error {
 	if len(result.formats) == 0 {
 		return errors.New("at least one output format is required")
 	}
+	if !result.noSave && strings.TrimSpace(result.output) == "" {
+		return errors.New("output directory cannot be empty; use -no-save")
+	}
 	for _, format := range result.formats {
 		if !report.ValidFormat(format) {
 			return fmt.Errorf("unknown report format %q", format)
@@ -40,6 +44,11 @@ func validateOptions(result options, commands []string, positional int) error {
 	}
 	if len(commands) == 0 && positional == 0 {
 		return errors.New("no command specified")
+	}
+	for _, command := range commands {
+		if strings.TrimSpace(command) == "" {
+			return errors.New("command cannot be empty")
+		}
 	}
 	commandCount := len(commands)
 	if positional > 0 {
@@ -73,6 +82,16 @@ func validateDimensions(width, height uint) error {
 func validateLabels(labels, commands []string) error {
 	if len(labels) == 0 {
 		return nil
+	}
+	seen := make(map[string]bool, len(labels))
+	for _, label := range labels {
+		if strings.TrimSpace(label) == "" {
+			return errors.New("labels cannot be empty")
+		}
+		if seen[label] {
+			return fmt.Errorf("duplicate label %q", label)
+		}
+		seen[label] = true
 	}
 	if len(commands) > 0 {
 		if len(labels) != len(commands) {

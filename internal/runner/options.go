@@ -18,6 +18,8 @@ type Config struct {
 type Options struct {
 	ShowOutput   bool
 	Output       io.Writer
+	Input        io.Reader
+	TerminalOut  io.Writer
 	TUI          bool
 	Duration     time.Duration
 	Width        uint16
@@ -42,7 +44,6 @@ type ProgressEvent struct {
 	Estimates     []ProgressEstimate
 	FixedDuration time.Duration
 	IntervalMS    float64
-	Elapsed       time.Duration
 	ETA           time.Duration
 }
 
@@ -51,7 +52,7 @@ type ProgressEstimate struct {
 	Completed          int
 	Total              int
 	HasEstimate        bool
-	Estimate           model.Summary
+	Estimate           *model.Summary
 	Runs               []model.Run
 	DiskFootprintBytes int64
 }

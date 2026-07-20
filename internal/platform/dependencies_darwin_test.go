@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -18,6 +19,16 @@ func TestParseOtool(t *testing.T) {
 	}
 }
 
+func TestParseOtoolPreservesPathsWithSpaces(t *testing.T) {
+	output := []byte("/tmp/tool:\n" +
+		"\t/Applications/My Tool/lib helper.dylib " +
+		"(compatibility version 1.0.0, current version 1.0.0)\n")
+	want := []string{"/Applications/My Tool/lib helper.dylib"}
+	if got := parseOtool(output); !reflect.DeepEqual(got, want) {
+		t.Fatalf("dependencies = %#v, want %#v", got, want)
+	}
+}
+
 func TestResolveDylibUsesRPathAndIdentifiesSharedCache(t *testing.T) {
 	directory := t.TempDir()
 	library := filepath.Join(directory, "liblocal.dylib")
@@ -26,12 +37,14 @@ func TestResolveDylibUsesRPathAndIdentifiesSharedCache(t *testing.T) {
 	}
 	library, _ = filepath.EvalSymlinks(library)
 	dependency, ok := resolveDylib(
+		context.Background(),
 		"@rpath/liblocal.dylib", "/tmp/tool", "/tmp/tool", []string{directory},
 	)
 	if !ok || dependency.Path != library || dependency.SharedCache {
 		t.Fatalf("resolved dependency = %+v, valid=%v", dependency, ok)
 	}
 	dependency, ok = resolveDylib(
+		context.Background(),
 		"/usr/lib/libSystem.B.dylib", "/tmp/tool", "/tmp/tool", nil,
 	)
 	if !ok || !dependency.SharedCache {

@@ -8,16 +8,14 @@ import (
 	"github.com/shellcell/snailrace/internal/model"
 )
 
-func writeMarkdown(writer io.Writer, report model.Report) error {
-	return WriteMarkdownWithCharts(writer, report, nil, "")
-}
-
-func WriteMarkdownWithCharts(
+func (renderer *Renderer) WriteMarkdownWithCharts(
 	writer io.Writer,
-	report model.Report,
 	charts []ChartArtifact,
 	chartDirectory string,
 ) error {
+	report := renderer.displayReport
+	checked := newErrorWriter(writer)
+	writer = checked
 	fmt.Fprintf(
 		writer,
 		"# 🐌 Snailrace Report\n\nMeasured %s on `%s/%s`. "+
@@ -26,13 +24,21 @@ func WriteMarkdownWithCharts(
 		report.Host.OS, report.Host.Architecture,
 		report.Config.Runs, report.Config.Warmups, report.Config.Mode,
 	)
+	fmt.Fprintf(
+		writer, "Balanced index dimensions actually included: **%s**.\n\n",
+		escapeMarkdown(renderer.dimensionText),
+	)
+	for _, caveat := range renderer.caveats {
+		fmt.Fprintf(writer, "> Reliability: %s.\n\n", escapeMarkdown(caveat))
+	}
 	writeMarkdownCommandLegend(writer, report)
+	writeMarkdownFailures(writer, report)
 	if len(report.Benchmarks) > 1 {
-		writeMarkdownRanking(writer, report)
+		writeMarkdownRankingWith(writer, report, renderer.ranking)
 	}
 	writeMarkdownCharts(writer, charts, chartDirectory)
 	if len(report.Benchmarks) > 1 {
-		writeMarkdownComparison(writer, report)
+		writeMarkdownComparison(writer, renderer)
 	}
 	fmt.Fprintln(writer, "## Statistical Detail")
 	for index, benchmark := range report.Benchmarks {
@@ -56,7 +62,7 @@ func WriteMarkdownWithCharts(
 	for _, note := range report.Notes {
 		fmt.Fprintf(writer, "> %s\n\n", escapeMarkdown(note))
 	}
-	return nil
+	return checked.Err()
 }
 
 func writeMarkdownBenchmark(
@@ -76,7 +82,7 @@ func writeMarkdownBenchmark(
 			"Disk footprint: %s executable + %s linked = %s "+
 			"(%d files; %d dyld-cache dependencies excluded)\n\n",
 		escapeMarkdown(label),
-		strings.Join(benchmark.Tool.Command, " "),
+		fullCommand(benchmark),
 		benchmark.Tool.SHA256,
 		formatBytes(float64(benchmark.Tool.SizeBytes)),
 		formatBytes(float64(benchmark.Tool.LinkedSizeBytes)),
@@ -89,7 +95,7 @@ func writeMarkdownBenchmark(
 		formatCount(benchmark.Summary.ValidSampleCount.Mean),
 		formatDuration(benchmark.Summary.SampleCoverageSeconds.Mean),
 	)
-	if !benchmarkSamplesReliable(benchmark, intervalSeconds) {
+	if !model.SamplingReliable(benchmark, intervalSeconds) {
 		fmt.Fprintln(
 			writer,
 			"> Sampling quality: **LIMITED** (fewer than two valid samples or intervals).",
@@ -101,8 +107,8 @@ func writeMarkdownBenchmark(
 		"| Metric | Mean ± σ | 95% CI mean | Median | P95 | Range |",
 	)
 	fmt.Fprintln(writer, "|---|---:|---:|---:|---:|---:|")
-	for _, row := range metricRows {
-		if !available(row, operatingSystem) {
+	for _, row := range metricCatalog {
+		if !availableFor(row, operatingSystem, benchmark.Summary) {
 			fmt.Fprintf(writer, "| %s | N/A | N/A | N/A | N/A | N/A |\n", row.name)
 			continue
 		}
