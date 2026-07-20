@@ -103,9 +103,23 @@ func TestNativeExecutableRunsExitZero(t *testing.T) {
 }
 
 func TestShellBenchmarksInspectDistinctTargetExecutables(t *testing.T) {
+	// Generated targets with different sizes keep the assertions hermetic:
+	// real system binaries can collide byte-for-byte (uname and sleep are the
+	// same size on Ubuntu 24.04).
+	directory := t.TempDir()
+	first := filepath.Join(directory, "first-tool")
+	second := filepath.Join(directory, "second-tool")
+	if err := os.WriteFile(first, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		second, []byte("#!/bin/sh\n# deliberately larger target\nexit 0\n"), 0o755,
+	); err != nil {
+		t.Fatal(err)
+	}
 	benchmarks, err := Benchmark(
 		context.Background(),
-		[]Spec{{Name: "uname", Shell: "uname"}, {Name: "sleep", Shell: "sleep 0"}},
+		[]Spec{{Name: "first", Shell: first}, {Name: "second", Shell: second}},
 		Config{Runs: 1, Interval: time.Millisecond}, Options{},
 	)
 	if err != nil {

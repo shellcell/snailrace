@@ -63,7 +63,10 @@ func (inspector *toolInspector) inspect(
 				"find executable %q: %w", spec.Args[0], err,
 			)
 		}
-		executable, _ = filepath.Abs(path)
+		executable = path
+		if absolute, err := filepath.Abs(path); err == nil {
+			executable = absolute
+		}
 	}
 	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
 		executable = resolved
@@ -118,12 +121,11 @@ func (inspector *toolInspector) pin(
 		file.Close()
 		return nil, err
 	}
-	if inspected := inspector.fileCache[tool.Executable]; inspected == nil ||
-		!os.SameFile(inspected, info) {
+	inspected := inspector.fileCache[tool.Executable]
+	if inspected == nil || !os.SameFile(inspected, info) {
 		file.Close()
 		return nil, errors.New("executable changed while being inspected")
 	}
-	inspected := inspector.fileCache[tool.Executable]
 	if inspected.Size() != info.Size() || !inspected.ModTime().Equal(info.ModTime()) {
 		file.Close()
 		return nil, errors.New("executable contents changed while being inspected")
@@ -193,10 +195,16 @@ func hashOpenFile(ctx context.Context, file *os.File) (string, error) {
 	}
 }
 
+// shellSpecial lists characters that give the leading word of a shell command
+// meaning beyond a plain executable name — quoting, operators, expansions,
+// globs, assignments, comments. Such words are never treated as pinnable
+// targets: substituting them could change what the shell would have run.
+const shellSpecial = "'\"|&;<>()$`*?[~=#"
+
 func shellExecutable(command string) string {
 	fields := strings.Fields(command)
 	if len(fields) == 0 || shellBuiltin(fields[0]) ||
-		strings.ContainsAny(fields[0], "'\"|&;<>()$`") {
+		strings.ContainsAny(fields[0], shellSpecial) {
 		return ""
 	}
 	path, err := exec.LookPath(fields[0])
@@ -213,23 +221,22 @@ func shellExecutable(command string) string {
 	return path
 }
 
-func shellBuiltin(name string) bool {
-	builtins := map[string]bool{
-		"!": true, ".": true, ":": true, "[": true, "alias": true,
-		"bg": true, "break": true, "cd": true, "command": true,
-		"continue": true, "echo": true, "eval": true, "exec": true,
-		"exit": true, "export": true, "false": true, "fc": true,
-		"fg": true, "getopts": true, "hash": true, "jobs": true,
-		"kill": true, "printf": true, "pwd": true, "read": true,
-		"readonly": true, "return": true, "set": true, "shift": true,
-		"test": true, "time": true, "times": true, "trap": true,
-		"true": true, "type": true, "ulimit": true, "umask": true,
-		"unalias": true, "unset": true, "wait": true, "{": true,
-		"builtin": true, "declare": true, "local": true, "source": true,
-		"typeset": true,
-	}
-	return builtins[name]
+var shellBuiltins = map[string]bool{
+	"!": true, ".": true, ":": true, "[": true, "alias": true,
+	"bg": true, "break": true, "cd": true, "command": true,
+	"continue": true, "echo": true, "eval": true, "exec": true,
+	"exit": true, "export": true, "false": true, "fc": true,
+	"fg": true, "getopts": true, "hash": true, "jobs": true,
+	"kill": true, "printf": true, "pwd": true, "read": true,
+	"readonly": true, "return": true, "set": true, "shift": true,
+	"test": true, "time": true, "times": true, "trap": true,
+	"true": true, "type": true, "ulimit": true, "umask": true,
+	"unalias": true, "unset": true, "wait": true, "{": true,
+	"builtin": true, "declare": true, "local": true, "source": true,
+	"typeset": true,
 }
+
+func shellBuiltin(name string) bool { return shellBuiltins[name] }
 
 // pinShellExecutable swaps the leading command word for the pinned descriptor
 // path so /bin/sh execs the inspected bytes; it declines when the word carries
@@ -243,7 +250,7 @@ func pinShellExecutable(command, executable string) (string, bool) {
 	if end < 0 {
 		end = len(trimmed)
 	}
-	if strings.ContainsAny(trimmed[:end], "'\"|&;<>()$`") {
+	if strings.ContainsAny(trimmed[:end], shellSpecial) {
 		return command, false
 	}
 	prefix := command[:len(command)-len(trimmed)]

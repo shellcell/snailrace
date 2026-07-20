@@ -54,16 +54,23 @@ func Benchmark(
 			return nil, fmt.Errorf("hash %q: %w", tool.Name, err)
 		}
 		pinned[index] = file
-		pinExecution := pinExecutionSupported && !executableIsScript(file)
-		if pinExecution {
-			prepared[index].executable = file
-		}
-		if tool.ShellTarget && pinExecution {
-			if command, ok := pinShellExecutable(
-				spec.Shell, pinnedExecutablePath(file),
-			); ok {
-				prepared[index].Shell = command
-				prepared[index].shellTarget = true
+		if pinnable := !executableIsScript(file); pinnable {
+			if tool.ShellTarget {
+				target := tool.Executable
+				if pinExecutionSupported {
+					target = pinnedExecutablePath(file)
+				}
+				if command, ok := pinShellExecutable(spec.Shell, target); ok {
+					prepared[index].Shell = command
+					prepared[index].shellTarget = true
+					if pinExecutionSupported {
+						prepared[index].executable = file
+					}
+				}
+			} else if pinExecutionSupported {
+				prepared[index].executable = file
+			} else {
+				prepared[index].executablePath = tool.Executable
 			}
 		}
 		benchmarks[index].Tool = tool

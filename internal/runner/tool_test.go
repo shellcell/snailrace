@@ -85,6 +85,21 @@ func TestPinShellExecutablePreservesArguments(t *testing.T) {
 	}
 }
 
+func TestShellTargetRejectsExpansionSyntax(t *testing.T) {
+	commands := []string{
+		"FOO=bar curl url", "curl* url", "cur?l url", "[tool] x",
+		"~/bin/tool run", "#comment", "$TOOL run",
+	}
+	for _, command := range commands {
+		if got := shellExecutable(command); got != "" {
+			t.Errorf("shellExecutable(%q) = %q, want rejection", command, got)
+		}
+		if _, ok := pinShellExecutable(command, "/proc/self/fd/3"); ok {
+			t.Errorf("pinShellExecutable(%q) accepted expansion syntax", command)
+		}
+	}
+}
+
 func TestToolVerificationDetectsExecutableReplacement(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "tool")
 	source, err := exec.LookPath("true")

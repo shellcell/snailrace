@@ -14,12 +14,16 @@ type Spec struct {
 
 // preparedSpec executes through the inspected descriptor when executable is
 // set, so the bytes that were hashed are provably the bytes that run even if
-// the path is swapped underneath us. shellTarget means Shell was already
-// rewritten to invoke the descriptor as its leading command word.
+// the path is swapped underneath us. executablePath is the weaker fallback
+// for platforms without descriptor execution (macOS): runs are pinned to the
+// inspected absolute path, preventing PATH re-resolution between runs.
+// shellTarget means Shell was already rewritten to invoke the pinned target
+// as its leading command word.
 type preparedSpec struct {
 	Spec
-	executable  *os.File
-	shellTarget bool
+	executable     *os.File
+	executablePath string
+	shellTarget    bool
 }
 
 func (spec Spec) command(ctx context.Context) *exec.Cmd {
@@ -30,7 +34,7 @@ func (spec Spec) command(ctx context.Context) *exec.Cmd {
 }
 
 func (spec preparedSpec) command(ctx context.Context) *exec.Cmd {
-	path := ""
+	path := spec.executablePath
 	if spec.executable != nil {
 		path = pinnedExecutablePath(spec.executable)
 	}

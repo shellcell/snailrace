@@ -34,3 +34,19 @@ func TestPreparedSpecPreservesInvocationIdentity(t *testing.T) {
 		t.Fatalf("shell target path/argv = %q/%v", target.Path, target.Args)
 	}
 }
+
+func TestPreparedSpecPinsResolvedPathWithoutDescriptor(t *testing.T) {
+	direct := preparedSpec{
+		Spec: Spec{Args: []string{"tool", "arg"}}, executablePath: "/resolved/tool",
+	}.command(context.Background())
+	if direct.Path != "/resolved/tool" || direct.Args[0] != "tool" {
+		t.Fatalf("direct path/argv = %q/%v", direct.Path, direct.Args)
+	}
+
+	shell := preparedSpec{
+		Spec: Spec{Shell: "exit 0"}, executablePath: "/resolved/sh",
+	}.command(context.Background())
+	if shell.Path != "/resolved/sh" || shell.Args[0] != "/bin/sh" {
+		t.Fatalf("shell path/argv = %q/%v", shell.Path, shell.Args)
+	}
+}
